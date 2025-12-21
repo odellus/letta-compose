@@ -1,4 +1,13 @@
 services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   letta_db:
     image: ankane/pgvector:v0.5.1
     networks:
@@ -48,6 +57,8 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     ports:
       - "8283:8283"
     extra_hosts:
@@ -64,4 +75,5 @@ services:
       - CLICKHOUSE_DATABASE=letta
       - CLICKHOUSE_USERNAME=letta
       - CLICKHOUSE_PASSWORD=letta
-      - LETTA_OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+      - LETTA_OTEL_EXPORTER_OTLP_ENDPOINT=${LETTA_OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_EXPORTER_OTLP_INSECURE=true

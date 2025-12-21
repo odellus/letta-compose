@@ -25,7 +25,7 @@ agent = client.agents.create(
         'model': '/home/thomas-wood/.cache/llama.cpp/unsloth_GLM-4.5-Air-GGUF_Q4_K_M_GLM-4.5-Air-Q4_K_M-00001-of-00002.gguf',
         'model_endpoint': 'http://coast-after-3:1234/v1',
         'model_endpoint_type': 'openai',
-        'context_window': 30000,
+        'context_window': 119000,
     },
     embedding='ollama/mxbai-embed-large:latest',
     memory_blocks=[

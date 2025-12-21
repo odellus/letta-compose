@@ -11,3 +11,6 @@ wheels/
 .env
 .persist
 letta/
+letta-python
+
+crates/target

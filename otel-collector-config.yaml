@@ -1,0 +1,22 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  otlphttp:
+    endpoint: http://host.docker.internal:3044/api/public/otel
+    headers:
+      Authorization: "Basic cGstbGYtOWZkNmVlZWEtYmMxNS00NWZmLWFjMjktMDAzZmFiMWRkNTVkOnNrLWxmLTZhMTAwMGYyLTE3ZGQtNDIxMi1iMWZiLTkzNzc4YjczNDU3OA=="
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]

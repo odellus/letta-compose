@@ -1,0 +1,8 @@
+[package]
+name = "letta-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+letta = { path = "../../letta-rs" }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
