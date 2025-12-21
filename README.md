@@ -5,6 +5,10 @@ I was having trouble with setting up letta and I don't have a clickhouse account
 ## Start the local letta server
 ```bash
 cd path/to/letta-compose
+# Copy example to .env
+cp .env.example .env
+# Update to point to your local openai compatible servers
+nano .env
 # start letta server
 docker compose up -d
 ```
