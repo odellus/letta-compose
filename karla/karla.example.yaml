@@ -1,0 +1,38 @@
+# Karla Configuration
+# Copy this to karla.yaml or ~/.config/karla/config.yaml
+
+# Letta server connection
+server:
+  base_url: http://localhost:8283
+  # Timeout in seconds for LLM requests. Omit or set to null for no timeout.
+  # Local LLMs can be slow, so we default to no timeout (wait forever).
+  # timeout: 300  # 5 minutes
+  # timeout: null  # no timeout (default)
+
+# LLM configuration
+# This is passed directly to Letta agent creation
+llm:
+  # Path to the model (for local) or model name (for API)
+  model: /home/user/.cache/llama.cpp/model.gguf
+
+  # Endpoint URL (llama.cpp server, vLLM, etc.)
+  model_endpoint: http://localhost:1234/v1
+
+  # Endpoint type: openai, anthropic, etc.
+  model_endpoint_type: openai
+
+  # Context window size in tokens
+  context_window: 32000
+
+# Embedding configuration
+embedding:
+  # Model identifier (e.g. ollama/model:tag or openai/text-embedding-3-small)
+  model: ollama/mxbai-embed-large:latest
+
+# Default settings for new agents
+agent_defaults:
+  # Keep system prompt immutable for KV cache optimization with local LLMs
+  kv_cache_friendly: true
+
+  # Include Letta's base tools (memory, archival, etc.)
+  include_base_tools: true

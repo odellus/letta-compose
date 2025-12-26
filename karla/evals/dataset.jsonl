@@ -1,0 +1,5 @@
+{"id": 0, "input": "Read the file /tmp/karla-eval/test.txt and tell me what it contains.", "ground_truth": "hello world", "agent_args": {"working_dir": "/tmp/karla-eval"}}
+{"id": 1, "input": "Create a file called /tmp/karla-eval/output.txt with the content 'test output'", "ground_truth": "test output", "agent_args": {"working_dir": "/tmp/karla-eval"}}
+{"id": 2, "input": "Run the command 'echo hello from bash' and tell me the output.", "ground_truth": "hello from bash", "agent_args": {"working_dir": "/tmp/karla-eval"}}
+{"id": 3, "input": "List the files in /tmp/karla-eval directory", "ground_truth": "test.txt", "agent_args": {"working_dir": "/tmp/karla-eval"}}
+{"id": 4, "input": "Edit the file /tmp/karla-eval/test.txt and replace 'hello' with 'goodbye'", "ground_truth": "goodbye world", "agent_args": {"working_dir": "/tmp/karla-eval"}}

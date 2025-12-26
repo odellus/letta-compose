@@ -1,0 +1,41 @@
+name: karla-tools-basic
+description: Basic tool tests for karla coding agent using LLM rubric grading
+dataset: dataset.jsonl
+setup_script: setup.py:prepare_eval_environment
+
+target:
+  kind: letta_agent
+  agent_script: create_agent.py:create_karla_agent
+  tool_executor_script: tool_executor.py:execute_tool
+  base_url: http://localhost:8283
+  timeout: 300
+  max_tool_iterations: 20
+
+graders:
+  correctness:
+    kind: model_judge
+    model: Qwen3-Coder-30B-A3B-UD-Q4_K_XL
+    provider: openai # Uses OPENAI_BASE_URL for local LLM
+    temperature: 0.0
+    extractor: last_assistant
+    prompt: |
+      Evaluate whether the coding agent correctly completed the task.
+
+      Scoring criteria:
+      - 1.0: Task completed correctly. The agent used appropriate tools and the result matches expectations.
+      - 0.75: Task mostly complete with minor issues (e.g., extra output, slightly different format).
+      - 0.5: Partial completion. Agent attempted the right approach but result is incomplete or has errors.
+      - 0.25: Minimal progress. Agent understood the task but failed to complete it properly.
+      - 0.0: Complete failure. Agent did not attempt the task or produced completely wrong results.
+
+      Focus on:
+      1. Did the agent use the correct tool(s) for the task?
+      2. Does the output contain the expected information?
+      3. Did the agent handle any errors appropriately?
+
+gate:
+  kind: simple
+  metric_key: correctness
+  aggregation: avg_score
+  op: gte
+  value: 0.7
