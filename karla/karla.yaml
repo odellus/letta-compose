@@ -1,0 +1,33 @@
+# Karla Configuration
+
+# Letta server connection
+server:
+  base_url: http://localhost:8283
+  timeout: 600  # 10 minutes for local LLMs
+
+# LLM providers - API keys and endpoints
+providers:
+  moonshotai:
+    type: api
+    api_key: sk-ywRWfT5uLEBfkj3lXbL64ZZynwr3NNRZHDDOu7D6Jk5UeEnX
+    base_url: https://api.moonshot.ai/v1
+  lm-studio:
+    type: api
+    api_key: lm-studio
+    base_url: http://coast-after-3:1234/v1
+
+# Active LLM configuration (which provider to use)
+llm:
+  provider: lm-studio
+  model: bartowski/Qwen_Qwen3-Next-80B-A3B-Instruct-GGUF:Q4_K_M
+  model_endpoint_type: openai
+  context_window: 32000
+
+# Embedding configuration
+embedding:
+  model: ollama/mxbai-embed-large:latest
+
+# Default settings for new agents
+agent_defaults:
+  kv_cache_friendly: true
+  include_base_tools: true

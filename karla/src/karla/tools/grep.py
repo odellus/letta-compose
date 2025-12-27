@@ -24,10 +24,10 @@ class GrepTool(Tool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name="Grep",
-            description="""Searches file contents using ripgrep.
+            description=r"""Searches file contents using ripgrep.
 
 Usage:
-- Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")
+- Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
 - Filter files with glob parameter (e.g., "*.js", "**/*.tsx")
 - Output modes: "content" shows matching lines, "files_with_matches" shows only file paths
 - Use for finding code patterns, function definitions, imports, etc.

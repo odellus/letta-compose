@@ -11,6 +11,23 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class ProviderConfig:
+    """Configuration for an LLM provider."""
+
+    type: str  # "api" or "local"
+    api_key: str | None = None
+    base_url: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ProviderConfig":
+        return cls(
+            type=data.get("type", "api"),
+            api_key=data.get("api_key") or data.get("key"),  # support both formats
+            base_url=data.get("base_url"),
+        )
+
+
+@dataclass
 class LLMConfig:
     """LLM configuration for Letta agents."""
 
@@ -18,15 +35,19 @@ class LLMConfig:
     model_endpoint: str
     model_endpoint_type: str = "openai"
     context_window: int = 8000
+    api_key: str | None = None  # API key for the endpoint
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for Letta client."""
-        return {
+        result = {
             "model": self.model,
             "model_endpoint": self.model_endpoint,
             "model_endpoint_type": self.model_endpoint_type,
             "context_window": self.context_window,
         }
+        if self.api_key:
+            result["api_key"] = self.api_key
+        return result
 
 
 @dataclass
@@ -66,16 +87,38 @@ class KarlaConfig:
     embedding: EmbeddingConfig
     server: ServerConfig = field(default_factory=ServerConfig)
     agent_defaults: AgentDefaults = field(default_factory=AgentDefaults)
+    providers: dict[str, ProviderConfig] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "KarlaConfig":
         """Create config from a dictionary."""
+        # Parse providers first
+        providers_data = data.get("providers", {})
+        providers = {
+            name: ProviderConfig.from_dict(pdata) for name, pdata in providers_data.items()
+        }
+
+        # Parse LLM config, resolving provider reference if present
         llm_data = data.get("llm", {})
+        provider_name = llm_data.get("provider")
+
+        # If a provider is specified, use its base_url and api_key
+        model_endpoint = llm_data.get("model_endpoint", "")
+        api_key = llm_data.get("api_key")
+
+        if provider_name and provider_name in providers:
+            provider = providers[provider_name]
+            if provider.base_url and not model_endpoint:
+                model_endpoint = provider.base_url
+            if provider.api_key and not api_key:
+                api_key = provider.api_key
+
         llm = LLMConfig(
             model=llm_data.get("model", ""),
-            model_endpoint=llm_data.get("model_endpoint", ""),
+            model_endpoint=model_endpoint,
             model_endpoint_type=llm_data.get("model_endpoint_type", "openai"),
             context_window=llm_data.get("context_window", 8000),
+            api_key=api_key,
         )
 
         embedding_data = data.get("embedding", {})
@@ -100,6 +143,7 @@ class KarlaConfig:
             embedding=embedding,
             server=server,
             agent_defaults=agent_defaults,
+            providers=providers,
         )
 
     @classmethod
