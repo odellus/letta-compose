@@ -50,7 +50,11 @@ services:
       retries: 5
 
   letta_server:
-    image: letta/letta:latest
+    # image: letta/letta:latest
+    build:
+      context: ./letta
+      dockerfile: Dockerfile
+      target: runtime
     hostname: letta-server
     depends_on:
       letta_db:
