@@ -237,3 +237,225 @@ class TestAgentContext:
             assert retrieved.kv_cache_friendly is True
         finally:
             clear_context()
+
+
+class TestHeadlessMode:
+    """Test CLI headless mode functionality."""
+
+    def test_headless_creates_agent(self, letta_client, llm_config):
+        """Test headless mode creates agent and runs loop."""
+        import asyncio
+        import tempfile
+
+        from karla.config import KarlaConfig
+        from karla.headless import run_headless, OutputFormat
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = KarlaConfig.from_dict({
+                "server": {"base_url": LETTA_URL, "timeout": None},
+                "llm": llm_config,
+                "embedding": {"model": LETTA_EMBEDDING},
+            })
+
+            # Run headless with a simple prompt
+            response, agent_id = asyncio.get_event_loop().run_until_complete(
+                run_headless(
+                    prompt="Say hello",
+                    config=config,
+                    working_dir=tmpdir,
+                    force_new=True,
+                )
+            )
+
+            try:
+                # Verify agent was created
+                assert agent_id is not None
+                agent = letta_client.agents.retrieve(agent_id)
+                assert agent.name.startswith("karla-")
+
+                # Verify response was received
+                assert response is not None
+                assert response.iterations >= 0
+            finally:
+                # Cleanup
+                try:
+                    letta_client.agents.delete(agent_id)
+                except Exception:
+                    pass
+
+    def test_headless_output_formats(self, letta_client, llm_config):
+        """Test headless mode output format options."""
+        import asyncio
+        import tempfile
+
+        from karla.config import KarlaConfig
+        from karla.headless import run_headless, format_headless_output
+        from karla.agent_loop import OutputFormat
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = KarlaConfig.from_dict({
+                "server": {"base_url": LETTA_URL, "timeout": None},
+                "llm": llm_config,
+                "embedding": {"model": LETTA_EMBEDDING},
+            })
+
+            response, agent_id = asyncio.get_event_loop().run_until_complete(
+                run_headless(
+                    prompt="Say hello",
+                    config=config,
+                    working_dir=tmpdir,
+                    force_new=True,
+                )
+            )
+
+            try:
+                # Test text format
+                text_output = format_headless_output(response, OutputFormat.TEXT)
+                assert isinstance(text_output, str)
+
+                # Test JSON format
+                json_output = format_headless_output(response, OutputFormat.JSON)
+                import json
+                parsed = json.loads(json_output)
+                assert "text" in parsed
+                assert "tool_results" in parsed
+                assert "iterations" in parsed
+            finally:
+                try:
+                    letta_client.agents.delete(agent_id)
+                except Exception:
+                    pass
+
+
+class TestAgentSessionContinuity:
+    """Test agent session continuity (E2E test)."""
+
+    def test_continue_last_agent(self, letta_client, llm_config):
+        """Test continuing with last agent maintains session."""
+        import asyncio
+        import tempfile
+
+        from karla.config import KarlaConfig
+        from karla.headless import run_headless
+        from karla.settings import SettingsManager
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = KarlaConfig.from_dict({
+                "server": {"base_url": LETTA_URL, "timeout": None},
+                "llm": llm_config,
+                "embedding": {"model": LETTA_EMBEDDING},
+            })
+
+            # First run - create new agent
+            response1, agent_id1 = asyncio.get_event_loop().run_until_complete(
+                run_headless(
+                    prompt="Remember the code word: BANANA",
+                    config=config,
+                    working_dir=tmpdir,
+                    force_new=True,
+                )
+            )
+
+            try:
+                # Verify agent was saved
+                settings = SettingsManager(project_dir=tmpdir)
+                saved_id = settings.get_last_agent()
+                assert saved_id == agent_id1
+
+                # Second run - continue last agent
+                response2, agent_id2 = asyncio.get_event_loop().run_until_complete(
+                    run_headless(
+                        prompt="What was the code word?",
+                        config=config,
+                        working_dir=tmpdir,
+                        continue_last=True,
+                    )
+                )
+
+                # Should use same agent
+                assert agent_id2 == agent_id1
+
+            finally:
+                # Cleanup
+                try:
+                    letta_client.agents.delete(agent_id1)
+                except Exception:
+                    pass
+
+    def test_force_new_creates_different_agent(self, letta_client, llm_config):
+        """Test force_new creates a new agent instead of continuing."""
+        import asyncio
+        import tempfile
+
+        from karla.config import KarlaConfig
+        from karla.headless import run_headless
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = KarlaConfig.from_dict({
+                "server": {"base_url": LETTA_URL, "timeout": None},
+                "llm": llm_config,
+                "embedding": {"model": LETTA_EMBEDDING},
+            })
+
+            # First run
+            _, agent_id1 = asyncio.get_event_loop().run_until_complete(
+                run_headless(
+                    prompt="Hello",
+                    config=config,
+                    working_dir=tmpdir,
+                    force_new=True,
+                )
+            )
+
+            try:
+                # Second run with force_new
+                _, agent_id2 = asyncio.get_event_loop().run_until_complete(
+                    run_headless(
+                        prompt="Hello again",
+                        config=config,
+                        working_dir=tmpdir,
+                        force_new=True,
+                    )
+                )
+
+                try:
+                    # Should be different agents
+                    assert agent_id2 != agent_id1
+                finally:
+                    try:
+                        letta_client.agents.delete(agent_id2)
+                    except Exception:
+                        pass
+            finally:
+                try:
+                    letta_client.agents.delete(agent_id1)
+                except Exception:
+                    pass
+
+    def test_explicit_agent_id(self, letta_client, test_agent, llm_config):
+        """Test using explicit agent ID."""
+        import asyncio
+        import tempfile
+
+        from karla.config import KarlaConfig
+        from karla.headless import run_headless
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = KarlaConfig.from_dict({
+                "server": {"base_url": LETTA_URL, "timeout": None},
+                "llm": llm_config,
+                "embedding": {"model": LETTA_EMBEDDING},
+            })
+
+            # Run with explicit agent ID
+            _, returned_id = asyncio.get_event_loop().run_until_complete(
+                run_headless(
+                    prompt="Hello",
+                    config=config,
+                    working_dir=tmpdir,
+                    agent_id=test_agent.id,
+                )
+            )
+
+            # Should use the specified agent
+            assert returned_id == test_agent.id
