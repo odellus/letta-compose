@@ -1,10 +1,32 @@
 """Configuration loading for karla agents."""
 
+import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
+from dotenv import load_dotenv
+
+
+def _expand_env_vars(obj: Any) -> Any:
+    """Recursively expand ${VAR} patterns in strings using environment variables."""
+    if isinstance(obj, str):
+        # Match ${VAR} or $VAR patterns
+        pattern = re.compile(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+        def replace(match: re.Match) -> str:
+            var_name = match.group(1) or match.group(2)
+            return os.environ.get(var_name, match.group(0))
+
+        return pattern.sub(replace, obj)
+    elif isinstance(obj, dict):
+        return {k: _expand_env_vars(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_expand_env_vars(item) for item in obj]
+    return obj
+
 
 if TYPE_CHECKING:
     from letta_client import Letta
@@ -185,15 +207,25 @@ class KarlaConfig:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "KarlaConfig":
-        """Load config from a YAML file."""
+        """Load config from a YAML file.
+
+        Also loads .env file from the same directory and expands
+        ${VAR} patterns in config values.
+        """
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
+        # Load .env from config directory
+        load_dotenv(path.parent / ".env")
+
         with open(path) as f:
             data = yaml.safe_load(f)
 
-        return cls.from_dict(data or {})
+        # Expand environment variables
+        data = _expand_env_vars(data or {})
+
+        return cls.from_dict(data)
 
     @classmethod
     def find_and_load(cls, start_dir: str | Path | None = None) -> "KarlaConfig | None":

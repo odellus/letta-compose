@@ -9,7 +9,7 @@ server:
 providers:
   moonshotai:
     type: api
-    api_key: sk-ywRWfT5uLEBfkj3lXbL64ZZynwr3NNRZHDDOu7D6Jk5UeEnX
+    api_key: ${MOONSHOT_API_KEY}
     base_url: https://api.moonshot.ai/v1
   lm-studio:
     type: api

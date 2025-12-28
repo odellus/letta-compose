@@ -17,6 +17,7 @@ import sys
 import uuid
 
 from karla.config import KarlaConfig, create_client, load_config
+from karla.context import AgentContext, set_context, clear_context
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager, HooksConfig as HooksConfigRuntime
 from karla.hotl import HOTLLoop
@@ -225,6 +226,17 @@ async def headless_mode(
     # Create hooks manager if configured
     hooks_manager = create_hooks_manager(config)
 
+    # Set up agent context for tools that need it (Task, Skill, etc.)
+    agent_ctx = AgentContext(
+        client=client,
+        agent_id=agent_id,
+        working_dir=working_dir,
+        llm_config=config.llm.to_dict(),
+        embedding_config=config.embedding.to_string(),
+        kv_cache_friendly=config.agent_defaults.kv_cache_friendly,
+    )
+    set_context(agent_ctx)
+
     # Parse output format
     try:
         fmt = OutputFormat(output_format)
@@ -261,11 +273,13 @@ async def headless_mode(
         if fmt != OutputFormat.TEXT:
             print(format_response(response, fmt))
 
+        clear_context()
         return 0
 
     except Exception as e:
         logger.exception("Error in agent loop")
         print(f"Error: {e}", file=sys.stderr)
+        clear_context()
         return 1
 
 
@@ -400,6 +414,17 @@ async def interactive_mode(
     # Create hooks manager if configured
     hooks_manager = create_hooks_manager(config)
 
+    # Set up agent context for tools that need it (Task, Skill, etc.)
+    agent_ctx = AgentContext(
+        client=client,
+        agent_id=agent_id,
+        working_dir=working_dir,
+        llm_config=config.llm.to_dict(),
+        embedding_config=config.embedding.to_string(),
+        kv_cache_friendly=config.agent_defaults.kv_cache_friendly,
+    )
+    set_context(agent_ctx)
+
     # Create command context
     ctx = CommandContext(
         client=client,
@@ -477,6 +502,8 @@ async def interactive_mode(
             hooks_manager=hooks_manager,
         )
 
+    # Clean up context
+    clear_context()
     return 0
 
 
