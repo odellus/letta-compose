@@ -17,6 +17,8 @@ from typing import Any, Callable, Optional
 from letta_client import Letta
 
 from karla.executor import ToolExecutor
+from karla.hooks import HooksManager, run_hooks
+from karla.tool import ToolResult as ExecutorToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +196,7 @@ async def run_agent_loop(
     on_tool_start: Optional[Callable[[str, dict], None]] = None,
     on_tool_end: Optional[Callable[[str, str, bool], None]] = None,
     on_text: Optional[Callable[[str], None]] = None,
+    hooks_manager: Optional[HooksManager] = None,
 ) -> AgentResponse:
     """Run the main agent loop with client-side tool execution.
 
@@ -216,6 +219,7 @@ async def run_agent_loop(
         on_tool_start: Callback when tool execution starts
         on_tool_end: Callback when tool execution ends
         on_text: Callback when text response received
+        hooks_manager: Optional hooks manager for event callbacks
 
     Returns:
         AgentResponse with final text and all tool results
@@ -223,6 +227,31 @@ async def run_agent_loop(
     all_results: list[ToolResult] = []
     final_text: Optional[str] = None
     iterations = 0
+
+    # Run on_loop_start hooks
+    if hooks_manager:
+        await hooks_manager.run_hooks("on_loop_start", {
+            "agent_id": agent_id,
+            "message": message,
+        })
+
+    # Run on_prompt_submit hooks
+    if hooks_manager:
+        hook_results = await hooks_manager.run_hooks("on_prompt_submit", {
+            "agent_id": agent_id,
+            "message": message,
+        })
+        # Check if any hook blocked the prompt
+        for hr in hook_results:
+            if hr.block:
+                return AgentResponse(
+                    text=hr.error or "Prompt blocked by hook",
+                    tool_results=[],
+                    iterations=0,
+                )
+            # Inject hook messages if any
+            if hr.inject_message:
+                message = f"{message}\n\n<user-prompt-submit-hook>\n{hr.inject_message}\n</user-prompt-submit-hook>"
 
     # Send initial message with retry
     response = await _send_with_retry(
@@ -251,8 +280,25 @@ async def run_agent_loop(
             if on_tool_start:
                 on_tool_start(tool_call.name, tool_call.arguments)
 
-            # Execute tool locally
-            result = await executor.execute(tool_call.name, tool_call.arguments)
+            # Run on_tool_start hooks
+            if hooks_manager:
+                hook_results = await hooks_manager.run_hooks("on_tool_start", {
+                    "agent_id": agent_id,
+                    "tool_name": tool_call.name,
+                    "tool_call_id": tool_call.tool_call_id,
+                    "arguments": tool_call.arguments,
+                })
+                # Check if any hook blocked the tool
+                for hr in hook_results:
+                    if hr.block:
+                        result = ExecutorToolResult.error(hr.error or "Tool blocked by hook")
+                        break
+                else:
+                    # No hook blocked, execute the tool
+                    result = await executor.execute(tool_call.name, tool_call.arguments)
+            else:
+                # Execute tool locally
+                result = await executor.execute(tool_call.name, tool_call.arguments)
 
             all_results.append(ToolResult(
                 tool_call_id=tool_call.tool_call_id,
@@ -263,6 +309,16 @@ async def run_agent_loop(
 
             if on_tool_end:
                 on_tool_end(tool_call.name, result.output, result.is_error)
+
+            # Run on_tool_end hooks
+            if hooks_manager:
+                await hooks_manager.run_hooks("on_tool_end", {
+                    "agent_id": agent_id,
+                    "tool_name": tool_call.name,
+                    "tool_call_id": tool_call.tool_call_id,
+                    "output": result.output,
+                    "is_error": result.is_error,
+                })
 
             # Send result back with retry
             response = await _send_with_retry(
@@ -292,6 +348,23 @@ async def run_agent_loop(
 
     if iterations >= max_iterations:
         logger.warning("Hit max iterations (%d) in agent loop", max_iterations)
+
+    # Run on_message hooks if there's a text response
+    if hooks_manager and final_text:
+        await hooks_manager.run_hooks("on_message", {
+            "agent_id": agent_id,
+            "text": final_text,
+            "iterations": iterations,
+        })
+
+    # Run on_loop_end hooks
+    if hooks_manager:
+        await hooks_manager.run_hooks("on_loop_end", {
+            "agent_id": agent_id,
+            "text": final_text,
+            "iterations": iterations,
+            "tool_count": len(all_results),
+        })
 
     return AgentResponse(
         text=final_text,

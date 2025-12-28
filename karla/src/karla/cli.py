@@ -18,15 +18,52 @@ import uuid
 
 from karla.config import KarlaConfig, create_client, load_config
 from karla.executor import ToolExecutor
+from karla.hooks import HooksManager, HooksConfig as HooksConfigRuntime
+from karla.hotl import HOTLLoop
 from karla.letta import register_tools_with_letta
 from karla.memory import create_default_memory_blocks, get_block_ids
 from karla.prompts import get_default_system_prompt, get_persona
 from karla.settings import SettingsManager
 from karla.tools import create_default_registry
 from karla.agent_loop import run_agent_loop, format_response, OutputFormat
+from karla.commands import dispatch_command, CommandContext
 
 
 logger = logging.getLogger(__name__)
+
+
+def create_hooks_manager(config: KarlaConfig) -> HooksManager | None:
+    """Create a HooksManager from config if any hooks are defined.
+
+    Args:
+        config: Karla configuration
+
+    Returns:
+        HooksManager if hooks are defined, None otherwise
+    """
+    hooks_config = config.hooks
+    # Check if any hooks are defined
+    has_hooks = any([
+        hooks_config.on_prompt_submit,
+        hooks_config.on_tool_start,
+        hooks_config.on_tool_end,
+        hooks_config.on_message,
+        hooks_config.on_loop_start,
+        hooks_config.on_loop_end,
+    ])
+    if not has_hooks:
+        return None
+
+    # Create runtime hooks config
+    runtime_config = HooksConfigRuntime(
+        on_prompt_submit=hooks_config.on_prompt_submit,
+        on_tool_start=hooks_config.on_tool_start,
+        on_tool_end=hooks_config.on_tool_end,
+        on_message=hooks_config.on_message,
+        on_loop_start=hooks_config.on_loop_start,
+        on_loop_end=hooks_config.on_loop_end,
+    )
+    return HooksManager(runtime_config)
 
 
 def find_config() -> KarlaConfig:
@@ -94,7 +131,7 @@ def get_or_create_agent(
     agent_id: str | None = None,
     continue_last: bool = False,
     force_new: bool = False,
-) -> str:
+) -> tuple[str, bool]:
     """Get an existing agent or create a new one.
 
     Args:
@@ -106,17 +143,17 @@ def get_or_create_agent(
         force_new: If True, always create new agent
 
     Returns:
-        Agent ID to use
+        Tuple of (agent_id, is_new) - is_new indicates if tools need registration
     """
     # Explicit agent ID takes priority
     if agent_id:
-        return agent_id
+        return agent_id, False  # Existing agent, don't re-register tools
 
     # Force new agent
     if force_new:
         new_id = create_agent(client, config)
         settings.save_last_agent(new_id)
-        return new_id
+        return new_id, True  # New agent, register tools
 
     # Try to continue last agent
     if continue_last:
@@ -125,14 +162,14 @@ def get_or_create_agent(
             # Verify agent still exists
             try:
                 client.agents.retrieve(last)
-                return last
+                return last, False  # Existing agent, don't re-register tools
             except Exception:
                 logger.warning("Last agent %s not found, creating new", last)
 
     # Default: create new agent
     new_id = create_agent(client, config)
     settings.save_last_agent(new_id)
-    return new_id
+    return new_id, True  # New agent, register tools
 
 
 async def headless_mode(
@@ -168,19 +205,25 @@ async def headless_mode(
     settings = SettingsManager(project_dir=working_dir)
 
     # Get or create agent
-    agent_id = get_or_create_agent(
+    agent_id, is_new = get_or_create_agent(
         client, config, settings,
         agent_id=agent_id,
         continue_last=continue_last,
         force_new=force_new,
     )
 
-    # Create registry and register tools
+    # Create registry and only register tools for new agents
+    # Re-registering tools on existing agents causes prompt regeneration
+    # which breaks KV cache (LCP similarity drops from ~100% to ~26%)
     registry = create_default_registry(working_dir)
-    register_tools_with_letta(client, agent_id, registry)
+    if is_new:
+        register_tools_with_letta(client, agent_id, registry)
 
     # Create executor
     executor = ToolExecutor(registry, working_dir)
+
+    # Create hooks manager if configured
+    hooks_manager = create_hooks_manager(config)
 
     # Parse output format
     try:
@@ -211,6 +254,7 @@ async def headless_mode(
             on_text=on_text,
             on_tool_start=on_tool_start,
             on_tool_end=on_tool_end,
+            hooks_manager=hooks_manager,
         )
 
         # Format and output
@@ -251,6 +295,189 @@ async def test_tool(registry, working_dir: str, tool_name: str, args_str: str):
         print(f"\n[stdout]\n{result.stdout}")
     if result.stderr:
         print(f"\n[stderr]\n{result.stderr}")
+
+
+async def run_with_hotl(
+    client,
+    agent_id: str,
+    executor,
+    message: str,
+    working_dir: str,
+    on_text=None,
+    on_tool_start=None,
+    on_tool_end=None,
+    hooks_manager=None,
+) -> None:
+    """Run agent loop with HOTL (Human Out of The Loop) support.
+
+    After each agent loop iteration, checks if HOTL mode is active
+    and if so, continues with the same prompt until completion.
+    """
+    hotl = HOTLLoop(working_dir)
+    current_message = message
+
+    while True:
+        try:
+            response = await run_agent_loop(
+                client=client,
+                agent_id=agent_id,
+                executor=executor,
+                message=current_message,
+                on_text=on_text,
+                on_tool_start=on_tool_start,
+                on_tool_end=on_tool_end,
+                hooks_manager=hooks_manager,
+            )
+
+            # Check if HOTL should continue
+            agent_output = response.text or ""
+            continuation = hotl.check_and_continue(agent_output)
+
+            if continuation:
+                # Print HOTL status
+                print(f"\n{continuation['status_message']}\n")
+                # Continue with injected message
+                current_message = (
+                    f"<system-reminder>\n"
+                    f"{continuation['status_message']}\n"
+                    f"</system-reminder>\n\n"
+                    f"{continuation['inject_message']}"
+                )
+            else:
+                # No HOTL or HOTL complete
+                break
+
+        except Exception as e:
+            logger.exception("Error in agent loop")
+            print(f"Error: {e}")
+            break
+
+
+async def interactive_mode(
+    config: KarlaConfig,
+    working_dir: str,
+    agent_id: str | None = None,
+    continue_last: bool = False,
+    force_new: bool = False,
+    model_override: str | None = None,
+) -> int:
+    """Run Karla in interactive chat mode with slash command support.
+
+    Args:
+        config: Karla configuration
+        working_dir: Working directory for tools
+        agent_id: Explicit agent ID
+        continue_last: Continue last agent
+        force_new: Force new agent
+        model_override: Override model from config
+
+    Returns:
+        Exit code (0 = success)
+    """
+    # Apply model override if provided
+    if model_override:
+        config.llm.model = model_override
+
+    client = create_client(config)
+    settings = SettingsManager(project_dir=working_dir)
+
+    # Get or create agent
+    agent_id, is_new = get_or_create_agent(
+        client, config, settings,
+        agent_id=agent_id,
+        continue_last=continue_last,
+        force_new=force_new,
+    )
+
+    # Create registry and only register tools for new agents
+    registry = create_default_registry(working_dir)
+    if is_new:
+        register_tools_with_letta(client, agent_id, registry)
+
+    # Create executor
+    executor = ToolExecutor(registry, working_dir)
+
+    # Create hooks manager if configured
+    hooks_manager = create_hooks_manager(config)
+
+    # Create command context
+    ctx = CommandContext(
+        client=client,
+        agent_id=agent_id,
+        working_dir=working_dir,
+        settings=settings,
+    )
+
+    # Print welcome message
+    agent = client.agents.retrieve(agent_id)
+    print(f"Karla Interactive Mode")
+    print(f"Agent: {agent.name} ({agent_id})")
+    print(f"Working directory: {working_dir}")
+    print("Type /help for commands, /exit to quit")
+    print()
+
+    # Callbacks for output
+    def on_text(text: str):
+        print(f"karla> {text}")
+
+    def on_tool_start(name: str, args: dict):
+        print(f"  [{name}]", end="", flush=True)
+
+    def on_tool_end(name: str, output: str, is_error: bool):
+        if is_error:
+            print(" ERROR")
+        else:
+            print(" done")
+
+    while True:
+        try:
+            user_input = input("you> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nGoodbye!")
+            break
+
+        if not user_input:
+            continue
+
+        # Check for slash commands
+        if user_input.startswith("/"):
+            output, continue_to_agent = await dispatch_command(user_input, ctx)
+            print(output)
+
+            if user_input == "/exit":
+                break
+
+            # If command injected a prompt, send it to agent (with HOTL support)
+            if continue_to_agent and ctx.inject_prompt:
+                await run_with_hotl(
+                    client=client,
+                    agent_id=ctx.agent_id,
+                    executor=executor,
+                    message=ctx.inject_prompt,
+                    working_dir=ctx.working_dir,
+                    on_text=on_text,
+                    on_tool_start=on_tool_start,
+                    on_tool_end=on_tool_end,
+                    hooks_manager=hooks_manager,
+                )
+                ctx.inject_prompt = None
+
+            continue
+
+        # Regular message to agent (with HOTL support)
+        await run_with_hotl(
+            client=client,
+            agent_id=ctx.agent_id,
+            executor=executor,
+            message=user_input,
+            working_dir=ctx.working_dir,
+            on_text=on_text,
+            on_tool_start=on_tool_start,
+            on_tool_end=on_tool_end,
+            hooks_manager=hooks_manager,
+        )
+
+    return 0
 
 
 async def repl(registry, working_dir: str):
@@ -313,8 +540,46 @@ async def repl(registry, working_dir: str):
         print()
 
 
+def _parse_chat_args(args: list[str]) -> dict:
+    """Parse args for chat subcommand."""
+    result = {
+        "working_dir": os.getcwd(),
+        "agent_id": None,
+        "continue_last": False,
+        "force_new": False,
+        "model": None,
+        "verbose": False,
+    }
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-d", "--working-dir") and i + 1 < len(args):
+            result["working_dir"] = os.path.abspath(args[i + 1])
+            i += 2
+        elif arg in ("-a", "--agent") and i + 1 < len(args):
+            result["agent_id"] = args[i + 1]
+            i += 2
+        elif arg in ("-c", "--continue"):
+            result["continue_last"] = True
+            i += 1
+        elif arg in ("-n", "--new"):
+            result["force_new"] = True
+            i += 1
+        elif arg in ("-m", "--model") and i + 1 < len(args):
+            result["model"] = args[i + 1]
+            i += 2
+        elif arg in ("-v", "--verbose"):
+            result["verbose"] = True
+            i += 1
+        else:
+            i += 1
+
+    return result
+
+
 def _handle_subcommand(command: str, args: list[str]):
-    """Handle subcommands (repl, test, list)."""
+    """Handle subcommands (chat, repl, test, list)."""
     working_dir = os.getcwd()
 
     # Parse working-dir if provided
@@ -322,6 +587,26 @@ def _handle_subcommand(command: str, args: list[str]):
         if arg in ("-d", "--working-dir") and i + 1 < len(args):
             working_dir = os.path.abspath(args[i + 1])
             break
+
+    if command == "chat":
+        # Parse chat-specific args
+        parsed = _parse_chat_args(args)
+
+        if parsed["verbose"]:
+            logging.basicConfig(level=logging.DEBUG)
+        else:
+            logging.basicConfig(level=logging.WARNING)
+
+        config = find_config()
+        exit_code = asyncio.run(interactive_mode(
+            config=config,
+            working_dir=parsed["working_dir"],
+            agent_id=parsed["agent_id"],
+            continue_last=parsed["continue_last"],
+            force_new=parsed["force_new"],
+            model_override=parsed["model"],
+        ))
+        sys.exit(exit_code)
 
     registry = create_default_registry(working_dir)
 
@@ -350,7 +635,7 @@ def _handle_subcommand(command: str, args: list[str]):
 
 def main():
     # Check for subcommands first (before argparse to avoid conflicts)
-    subcommands = {"repl", "test", "list"}
+    subcommands = {"chat", "repl", "test", "list"}
 
     # If first non-flag arg is a subcommand, handle it separately
     if len(sys.argv) > 1 and sys.argv[1] in subcommands:
@@ -366,6 +651,8 @@ Examples:
   karla "Create a hello.py file"          Run single prompt
   karla --continue "Add a function"       Continue last agent
   karla --new "Start fresh project"       Force new agent
+  karla chat                              Interactive mode with slash commands
+  karla chat --continue                   Continue last agent interactively
   karla repl                              Tool testing REPL
   karla list                              List available tools
 """,

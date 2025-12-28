@@ -10,6 +10,7 @@ from typing import Optional
 class ProjectSettings:
     """Project-level settings stored in .karla/settings.local.json."""
     last_agent: Optional[str] = None
+    pinned_agents: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -17,6 +18,7 @@ class GlobalSettings:
     """Global settings stored in ~/.karla/settings.json."""
     last_agent: Optional[str] = None
     default_model: Optional[str] = None
+    pinned_agents: list[str] = field(default_factory=list)
 
 
 class SettingsManager:
@@ -101,3 +103,43 @@ class SettingsManager:
         global_ = self.load_global()
         global_.default_model = model
         self.save_global(global_)
+
+    def get_pinned_agents(self) -> list[str]:
+        """Get all pinned agents (combined local and global, deduplicated)."""
+        local = self.load_local()
+        global_ = self.load_global()
+
+        # Combine and deduplicate, preserving order
+        seen = set()
+        result = []
+        for agent_id in local.pinned_agents + global_.pinned_agents:
+            if agent_id not in seen:
+                seen.add(agent_id)
+                result.append(agent_id)
+        return result
+
+    def pin_agent(self, agent_id: str, local: bool = False) -> None:
+        """Pin an agent to settings."""
+        if local:
+            settings = self.load_local()
+            if agent_id not in settings.pinned_agents:
+                settings.pinned_agents.append(agent_id)
+            self.save_local(settings)
+        else:
+            settings = self.load_global()
+            if agent_id not in settings.pinned_agents:
+                settings.pinned_agents.append(agent_id)
+            self.save_global(settings)
+
+    def unpin_agent(self, agent_id: str, local: bool = False) -> None:
+        """Unpin an agent from settings."""
+        if local:
+            settings = self.load_local()
+            if agent_id in settings.pinned_agents:
+                settings.pinned_agents.remove(agent_id)
+            self.save_local(settings)
+        else:
+            settings = self.load_global()
+            if agent_id in settings.pinned_agents:
+                settings.pinned_agents.remove(agent_id)
+            self.save_global(settings)

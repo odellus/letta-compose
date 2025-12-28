@@ -80,6 +80,37 @@ class AgentDefaults:
 
 
 @dataclass
+class HooksConfig:
+    """Configuration for hooks.
+
+    Each hook is a list of shell commands that execute on events.
+    Commands receive event data as JSON on stdin and can:
+    - Return JSON with "inject_message" to add context
+    - Return JSON with "block": true to block the action
+    - Return non-zero exit code to block the action
+    """
+
+    on_prompt_submit: list[str] = field(default_factory=list)
+    on_tool_start: list[str] = field(default_factory=list)
+    on_tool_end: list[str] = field(default_factory=list)
+    on_message: list[str] = field(default_factory=list)
+    on_loop_start: list[str] = field(default_factory=list)
+    on_loop_end: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "HooksConfig":
+        """Create hooks config from a dictionary."""
+        return cls(
+            on_prompt_submit=data.get("on_prompt_submit", []),
+            on_tool_start=data.get("on_tool_start", []),
+            on_tool_end=data.get("on_tool_end", []),
+            on_message=data.get("on_message", []),
+            on_loop_start=data.get("on_loop_start", []),
+            on_loop_end=data.get("on_loop_end", []),
+        )
+
+
+@dataclass
 class KarlaConfig:
     """Top-level karla configuration."""
 
@@ -88,6 +119,7 @@ class KarlaConfig:
     server: ServerConfig = field(default_factory=ServerConfig)
     agent_defaults: AgentDefaults = field(default_factory=AgentDefaults)
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
+    hooks: HooksConfig = field(default_factory=HooksConfig)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "KarlaConfig":
@@ -138,12 +170,17 @@ class KarlaConfig:
             include_base_tools=defaults_data.get("include_base_tools", True),
         )
 
+        # Parse hooks
+        hooks_data = data.get("hooks", {})
+        hooks = HooksConfig.from_dict(hooks_data)
+
         return cls(
             llm=llm,
             embedding=embedding,
             server=server,
             agent_defaults=agent_defaults,
             providers=providers,
+            hooks=hooks,
         )
 
     @classmethod

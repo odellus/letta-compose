@@ -3,7 +3,7 @@
 # Letta server connection
 server:
   base_url: http://localhost:8283
-  timeout: 600  # 10 minutes for local LLMs
+  timeout: 1800 # 10 minutes for local LLMs
 
 # LLM providers - API keys and endpoints
 providers:
@@ -21,7 +21,7 @@ llm:
   provider: lm-studio
   model: bartowski/Qwen_Qwen3-Next-80B-A3B-Instruct-GGUF:Q4_K_M
   model_endpoint_type: openai
-  context_window: 32000
+  context_window: 120000
 
 # Embedding configuration
 embedding:
