@@ -1,0 +1,17 @@
+#!/usr/bin/env -S uv run --project /home/thomas/src/projects/letta-proj/karla python
+"""Karla ACP server.
+
+Place this at ~/.local/bin/karla
+"""
+
+import sys
+from pathlib import Path
+
+# Add python-sdk to path
+python_sdk = Path("/home/thomas/src/projects/letta-proj/python-sdk/src")
+if python_sdk.exists():
+    sys.path.insert(0, str(python_sdk))
+
+from karla.acp_server import main
+
+main()

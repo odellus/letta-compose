@@ -10,7 +10,9 @@ Karla uses the following blocks:
 """
 
 import logging
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from letta_client import Letta
@@ -202,3 +204,114 @@ def get_block_ids(blocks: list[MemoryBlock]) -> list[str]:
         List of block IDs
     """
     return [b.id for b in blocks]
+
+
+def generate_project_context(working_dir: str) -> str:
+    """Generate project context from the working directory.
+
+    Collects information about:
+    - Working directory path
+    - Git branch and status (if git repo)
+    - Key project files
+
+    Args:
+        working_dir: Path to the working directory
+
+    Returns:
+        Formatted project context string
+    """
+    cwd = Path(working_dir)
+    lines = ["# Project Context", ""]
+    lines.append(f"Working directory: {working_dir}")
+
+    # Check if git repo
+    git_dir = cwd / ".git"
+    if git_dir.exists():
+        try:
+            # Get current branch
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                branch = result.stdout.strip()
+                lines.append(f"Git branch: {branch}")
+
+            # Get status summary
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=working_dir,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                status_lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
+                modified = sum(1 for l in status_lines if l.startswith(" M") or l.startswith("M"))
+                added = sum(1 for l in status_lines if l.startswith("A") or l.startswith("??"))
+                deleted = sum(1 for l in status_lines if l.startswith(" D") or l.startswith("D"))
+
+                status_parts = []
+                if modified:
+                    status_parts.append(f"{modified} modified")
+                if added:
+                    status_parts.append(f"{added} untracked/added")
+                if deleted:
+                    status_parts.append(f"{deleted} deleted")
+
+                if status_parts:
+                    lines.append(f"Git status: {', '.join(status_parts)}")
+                else:
+                    lines.append("Git status: clean")
+
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass  # Git not available or timed out
+
+    # Key project files
+    key_files = [
+        "README.md", "README", "readme.md",
+        "pyproject.toml", "setup.py", "setup.cfg",
+        "package.json", "package-lock.json",
+        "Cargo.toml", "go.mod", "Makefile",
+        "Dockerfile", "docker-compose.yml",
+        ".env.example", "requirements.txt",
+    ]
+
+    found_files = []
+    for f in key_files:
+        if (cwd / f).exists():
+            found_files.append(f)
+
+    if found_files:
+        lines.append("")
+        lines.append("## Key Files")
+        for f in found_files[:10]:  # Limit to 10
+            lines.append(f"- {f}")
+
+    return "\n".join(lines)
+
+
+def update_project_block(client: Letta, agent_id: str, working_dir: str) -> None:
+    """Update the project memory block with current context.
+
+    Args:
+        client: Letta client
+        agent_id: Agent ID to update
+        working_dir: Working directory path
+    """
+    # Get project context
+    context = generate_project_context(working_dir)
+
+    # Find and update the project block
+    agent = client.agents.retrieve(agent_id)
+    for block_id in agent.memory.block_ids:
+        block = client.blocks.retrieve(block_id)
+        if block.label == "project":
+            client.blocks.modify(block_id, value=context)
+            logger.info("Updated project block for agent %s", agent_id)
+            return
+
+    logger.warning("No project block found for agent %s", agent_id)

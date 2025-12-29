@@ -12,12 +12,10 @@ dependencies = [
     "httpx>=0.27",
     "html2text>=2024.2",
     "langfuse>=2.0",
+    "agent-client-protocol",
 ]
 
 [project.optional-dependencies]
-acp = [
-    "agent-client-protocol>=0.1.0",
-]
 evals = [
     "letta-evals",
 ]
@@ -29,13 +27,21 @@ dev = [
 [tool.uv.sources]
 letta-client = { git = "https://github.com/odellus/letta-python.git", rev = "5a1c107553619dacac5747b08af504eef9487647" }
 letta-evals = { git = "https://github.com/odellus/letta-evals.git", rev = "f22f8fd8500041bcb4407a231590868e7af46cf6" }
+agent-client-protocol = { path = "../python-sdk", editable = true }
 
 [project.scripts]
-karla = "karla.cli:main"
+karla-cli = "karla.cli:main"
+karla-acp = "karla.acp_server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.14.10",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/karla"]

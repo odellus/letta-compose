@@ -23,9 +23,31 @@ def load_system_prompt(name: str = "karla_main") -> str:
     return prompt_file.read_text()
 
 
-def get_default_system_prompt() -> str:
-    """Get the default Karla system prompt."""
-    return load_system_prompt("karla_main")
+def get_default_system_prompt(working_dir: str | None = None) -> str:
+    """Get the default Karla system prompt.
+
+    Args:
+        working_dir: Optional working directory to inject into prompt
+    """
+    prompt = load_system_prompt("karla_main")
+
+    if working_dir:
+        env_info = f"""
+# Environment
+Working directory: {working_dir}
+"""
+        # Insert after the first heading
+        lines = prompt.split('\n')
+        # Find first line after opening (after "You are Karla...")
+        insert_idx = 2  # After first two lines
+        for i, line in enumerate(lines):
+            if line.startswith('# ') and i > 0:
+                insert_idx = i
+                break
+        lines.insert(insert_idx, env_info)
+        prompt = '\n'.join(lines)
+
+    return prompt
 
 
 def get_persona() -> str:

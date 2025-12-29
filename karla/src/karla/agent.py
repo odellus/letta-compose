@@ -75,8 +75,8 @@ def create_karla_agent(
     if name is None:
         name = f"karla-{uuid.uuid4().hex[:8]}"
 
-    # Get system prompt
-    system_prompt = get_default_system_prompt()
+    # Get system prompt with working directory injected
+    system_prompt = get_default_system_prompt(working_dir=working_dir)
 
     # Create memory blocks if requested
     block_ids = []

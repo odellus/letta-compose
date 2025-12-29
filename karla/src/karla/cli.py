@@ -76,13 +76,14 @@ def find_config() -> KarlaConfig:
         sys.exit(1)
 
 
-def create_agent(client, config: KarlaConfig, name: str | None = None) -> str:
+def create_agent(client, config: KarlaConfig, name: str | None = None, working_dir: str | None = None) -> str:
     """Create a new Karla agent.
 
     Args:
         client: Letta client
         config: Karla configuration
         name: Agent name (auto-generated if not provided)
+        working_dir: Working directory to inject into system prompt
 
     Returns:
         Agent ID
@@ -90,7 +91,11 @@ def create_agent(client, config: KarlaConfig, name: str | None = None) -> str:
     if name is None:
         name = f"karla-{uuid.uuid4().hex[:8]}"
 
-    system_prompt = get_default_system_prompt()
+    # Default to cwd if not specified
+    if working_dir is None:
+        working_dir = os.getcwd()
+
+    system_prompt = get_default_system_prompt(working_dir=working_dir)
 
     # Create memory blocks first
     logger.info("Creating memory blocks for agent %s", name)

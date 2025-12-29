@@ -8,11 +8,13 @@ This module implements the core message loop that:
 5. Continues until no more tool calls or the agent completes
 """
 
+import asyncio
+import inspect
 import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, Union
 
 from letta_client import Letta
 
@@ -140,50 +142,140 @@ def send_approval(
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 1.0  # seconds
 
+# Callback types that can be sync or async
+ToolStartCallback = Callable[[str, dict], Union[None, Awaitable[None]]]
+ToolEndCallback = Callable[[str, str, bool], Union[None, Awaitable[None]]]
+TextCallback = Callable[[str], Union[None, Awaitable[None]]]
 
-async def _send_with_retry(
+
+async def _maybe_await(result: Union[None, Awaitable[None]]) -> None:
+    """Await the result if it's a coroutine, otherwise do nothing."""
+    if result is not None and inspect.iscoroutine(result):
+        await result
+
+
+async def _stream_message(
     client: Letta,
     agent_id: str,
     messages: list,
-    max_retries: int = DEFAULT_MAX_RETRIES,
-    retry_delay: float = DEFAULT_RETRY_DELAY,
-):
-    """Send a message with retry logic for transient errors.
+    on_text: Optional[TextCallback] = None,
+    on_tool_start: Optional[ToolStartCallback] = None,
+) -> tuple[Optional[str], list[PendingToolCall]]:
+    """Stream a message and return accumulated text and any pending tool calls.
 
     Args:
         client: Letta client
         agent_id: Agent ID
         messages: Messages to send
-        max_retries: Maximum number of retries
-        retry_delay: Delay between retries in seconds
+        on_text: Callback for text chunks (called for each token)
+        on_tool_start: Callback when tool call detected (name, partial args)
 
     Returns:
-        Response from the API
-
-    Raises:
-        Exception: If all retries fail
+        Tuple of (accumulated_text, pending_tool_calls)
     """
-    import asyncio
+    accumulated_text = ""
+    pending_tools: list[PendingToolCall] = []
 
-    last_error = None
-    for attempt in range(max_retries + 1):
-        try:
-            return client.agents.messages.create(
-                agent_id=agent_id,
-                messages=messages,
-            )
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries:
-                logger.warning(
-                    "Request failed (attempt %d/%d): %s. Retrying in %.1fs...",
-                    attempt + 1, max_retries + 1, e, retry_delay
-                )
-                await asyncio.sleep(retry_delay)
-            else:
-                logger.error("Request failed after %d attempts: %s", max_retries + 1, e)
+    # Track tool calls being built up from deltas
+    tool_calls_in_progress: dict[str, dict] = {}  # tool_call_id -> {name, arguments}
 
-    raise last_error
+    # Use streaming API
+    stream = client.agents.messages.stream(
+        agent_id=agent_id,
+        messages=messages,
+        stream_tokens=True,
+    )
+
+    for chunk in stream:
+        chunk_type = type(chunk).__name__
+
+        # Handle text tokens
+        if chunk_type == "AssistantMessage" and hasattr(chunk, "content") and chunk.content:
+            token = str(chunk.content)
+            accumulated_text += token
+            if on_text:
+                await _maybe_await(on_text(token))
+
+        # Handle tool call deltas - accumulate them
+        elif chunk_type == "ApprovalRequestMessage" and hasattr(chunk, "tool_call"):
+            tc = chunk.tool_call
+            tc_id = getattr(tc, "tool_call_id", "") or ""
+            tc_name = getattr(tc, "name", None)
+            tc_args = getattr(tc, "arguments", None)
+
+            if not tc_id:
+                continue
+
+            # Initialize or update the in-progress tool call
+            if tc_id not in tool_calls_in_progress:
+                tool_calls_in_progress[tc_id] = {"name": "", "arguments": ""}
+
+            if tc_name:
+                tool_calls_in_progress[tc_id]["name"] = tc_name
+                # Notify that a tool call started
+                if on_tool_start:
+                    await _maybe_await(on_tool_start(tc_name, {}))
+
+            if tc_args:
+                tool_calls_in_progress[tc_id]["arguments"] += tc_args
+
+        # Stop/usage messages are just logged
+        elif chunk_type in ("LettaStopReason", "LettaUsageStatistics"):
+            logger.debug("Stream end: %s", chunk_type)
+
+    # Convert accumulated tool calls to PendingToolCall objects
+    for tc_id, tc_data in tool_calls_in_progress.items():
+        if tc_data["name"]:
+            try:
+                args = json.loads(tc_data["arguments"]) if tc_data["arguments"] else {}
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse tool args: %s", tc_data["arguments"][:100])
+                args = {}
+
+            pending_tools.append(PendingToolCall(
+                tool_call_id=tc_id,
+                name=tc_data["name"],
+                arguments=args,
+            ))
+
+    return accumulated_text if accumulated_text else None, pending_tools
+
+
+async def _send_approval(
+    client: Letta,
+    agent_id: str,
+    tool_call_id: str,
+    result: str,
+    is_error: bool,
+    on_text: Optional[TextCallback] = None,
+) -> tuple[Optional[str], list[PendingToolCall]]:
+    """Send tool result and stream the response.
+
+    Args:
+        client: Letta client
+        agent_id: Agent ID
+        tool_call_id: ID of the tool call being responded to
+        result: Tool execution output
+        is_error: Whether the tool execution failed
+        on_text: Callback for text chunks
+
+    Returns:
+        Tuple of (text_response, pending_tool_calls)
+    """
+    return await _stream_message(
+        client,
+        agent_id,
+        [{
+            "type": "approval",
+            "approvals": [{
+                "type": "tool",
+                "tool_call_id": tool_call_id,
+                "tool_return": result,
+                "status": "error" if is_error else "success",
+            }]
+        }],
+        on_text=on_text,
+    )
 
 
 async def run_agent_loop(
@@ -193,9 +285,9 @@ async def run_agent_loop(
     message: str,
     max_iterations: int = 50,
     max_retries: int = DEFAULT_MAX_RETRIES,
-    on_tool_start: Optional[Callable[[str, dict], None]] = None,
-    on_tool_end: Optional[Callable[[str, str, bool], None]] = None,
-    on_text: Optional[Callable[[str], None]] = None,
+    on_tool_start: Optional[ToolStartCallback] = None,
+    on_tool_end: Optional[ToolEndCallback] = None,
+    on_text: Optional[TextCallback] = None,
     hooks_manager: Optional[HooksManager] = None,
 ) -> AgentResponse:
     """Run the main agent loop with client-side tool execution.
@@ -228,6 +320,9 @@ async def run_agent_loop(
     final_text: Optional[str] = None
     iterations = 0
 
+    # Reset cancellation state at start of new prompt
+    executor.reset()
+
     # Run on_loop_start hooks
     if hooks_manager:
         await hooks_manager.run_hooks("on_loop_start", {
@@ -253,21 +348,26 @@ async def run_agent_loop(
             if hr.inject_message:
                 message = f"{message}\n\n<user-prompt-submit-hook>\n{hr.inject_message}\n</user-prompt-submit-hook>"
 
-    # Send initial message with retry
-    response = await _send_with_retry(
+    # Send initial message with streaming
+    text, pending_tools = await _stream_message(
         client, agent_id,
         [{"role": "user", "content": message}],
-        max_retries=max_retries,
+        on_text=on_text,
     )
-
-    text, pending_tools = parse_message_response(response)
     if text:
         final_text = text
-        if on_text:
-            on_text(text)
 
     # Process tool calls in a loop
     while pending_tools and iterations < max_iterations:
+        # Check for cancellation
+        if executor._cancelled:
+            logger.info("Agent loop cancelled at iteration %d", iterations)
+            return AgentResponse(
+                text="Cancelled",
+                tool_results=all_results,
+                iterations=iterations,
+            )
+
         iterations += 1
 
         for tool_call in pending_tools:
@@ -278,7 +378,7 @@ async def run_agent_loop(
             )
 
             if on_tool_start:
-                on_tool_start(tool_call.name, tool_call.arguments)
+                await _maybe_await(on_tool_start(tool_call.name, tool_call.arguments))
 
             # Run on_tool_start hooks
             if hooks_manager:
@@ -308,7 +408,7 @@ async def run_agent_loop(
             ))
 
             if on_tool_end:
-                on_tool_end(tool_call.name, result.output, result.is_error)
+                await _maybe_await(on_tool_end(tool_call.name, result.output, result.is_error))
 
             # Run on_tool_end hooks
             if hooks_manager:
@@ -320,28 +420,26 @@ async def run_agent_loop(
                     "is_error": result.is_error,
                 })
 
-            # Send result back with retry
-            response = await _send_with_retry(
+            # Check for cancellation before sending approval
+            if executor._cancelled:
+                logger.info("Agent loop cancelled after tool %s", tool_call.name)
+                return AgentResponse(
+                    text="Cancelled",
+                    tool_results=all_results,
+                    iterations=iterations,
+                )
+
+            # Send result back with streaming
+            text, pending_tools = await _send_approval(
                 client,
                 agent_id,
-                [{
-                    "type": "approval",
-                    "approvals": [{
-                        "type": "tool",
-                        "tool_call_id": tool_call.tool_call_id,
-                        "tool_return": result.output,
-                        "status": "error" if result.is_error else "success",
-                    }]
-                }],
-                max_retries=max_retries,
+                tool_call.tool_call_id,
+                result.output,
+                result.is_error,
+                on_text=on_text,
             )
-
-            # Parse new response
-            text, pending_tools = parse_message_response(response)
             if text:
                 final_text = text
-                if on_text:
-                    on_text(text)
 
             # Break to restart loop with new pending tools
             break
