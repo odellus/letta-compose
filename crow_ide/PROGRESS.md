@@ -1,14 +1,14 @@
 # Crow IDE Progress
 
-## Current Phase: 2
-## Current Step: Write File API tests
-## Test Status: PASSING (Phase 1)
+## Current Phase: 3
+## Current Step: Write Terminal tests
+## Test Status: PASSING (Phase 1-2)
 ## Blockers: None
 
 ### Completed
 - [x] Project structure created
 - [x] Phase 1: ACP Bridge - tests passing (3/3)
-- [ ] Phase 2: File API - tests passing
+- [x] Phase 2: File API - tests passing (8/8)
 - [ ] Phase 3: Terminal WebSocket - tests passing
 - [ ] Phase 4: Server Integration - tests passing
 - [ ] Phase 5: Frontend Build - builds clean
@@ -16,8 +16,7 @@
 
 ### Test Results (latest)
 ```
-crow_ide/tests/test_acp_bridge.py::test_bridge_accepts_connection PASSED
-crow_ide/tests/test_acp_bridge.py::test_bridge_forwards_stdout_to_websocket PASSED
-crow_ide/tests/test_acp_bridge.py::test_bridge_forwards_websocket_to_stdin PASSED
-3 passed
+11 passed in 0.04s
+- test_acp_bridge.py: 3 passed
+- test_file_api.py: 8 passed
 ```
