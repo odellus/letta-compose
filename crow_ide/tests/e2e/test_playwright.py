@@ -83,8 +83,8 @@ def test_agent_panel_visible(server):
 
         page.goto(server)
 
-        # Wait for agent panel
-        agent_panel = page.locator("[data-testid='agent-panel']")
+        # Wait for agent panel (use .first since there may be nested elements)
+        agent_panel = page.locator("[data-testid='agent-panel']").first
         expect(agent_panel).to_be_visible(timeout=5000)
 
         browser.close()
