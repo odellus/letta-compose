@@ -2,16 +2,21 @@
 
 from karla.commands.registry import register, CommandType, COMMANDS
 from karla.commands.context import CommandContext
+from karla.memory import update_project_block
 
 
 @register("/clear", "Clear conversation history", CommandType.API, order=10)
 async def cmd_clear(ctx: CommandContext) -> str:
-    """Reset the agent's message buffer."""
+    """Reset the agent's message buffer and refresh project context."""
     ctx.client.agents.messages.reset(
         agent_id=ctx.agent_id,
         add_default_initial_messages=False,
     )
-    return "Conversation cleared. Memory blocks preserved."
+
+    # Refresh project memory block with current environment context
+    update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
+
+    return "Conversation cleared. Project context refreshed."
 
 
 @register("/compact", "Summarize conversation history", CommandType.API, order=11)
@@ -21,8 +26,15 @@ async def cmd_compact(ctx: CommandContext) -> str:
         result = ctx.client.agents.messages.compact(agent_id=ctx.agent_id)
         return f"Compacted {result.num_messages_before} -> {result.num_messages_after} messages"
     except Exception as e:
-        # Compact may not be available on all Letta server versions
+        # Compact may not be available on all Crow server versions
         return f"Compact not available: {e}"
+
+
+@register("/refresh", "Refresh project context (git status, files)", CommandType.CLI, order=13)
+async def cmd_refresh(ctx: CommandContext) -> str:
+    """Refresh the project memory block with current environment."""
+    update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
+    return "Project context refreshed (cwd, git status, key files)."
 
 
 @register("/memory", "View memory blocks", CommandType.CLI, order=12)

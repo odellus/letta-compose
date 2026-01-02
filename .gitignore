@@ -11,6 +11,7 @@ wheels/
 .env
 .persist
 claude-code-acp
+claude-plugins-official
 crates/target
 crow_agent
 Lares

@@ -1,11 +1,11 @@
 [project]
 name = "karla"
 version = "0.1.0"
-description = "A Python coding agent with Letta backend and ACP support"
+description = "A Python coding agent with Crow backend and ACP support"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "letta-client",
+    "crow-client",
     "pydantic>=2.0",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
@@ -16,17 +16,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-evals = [
-    "letta-evals",
-]
 dev = [
     "pytest>=8.0",
     "ruff>=0.8",
 ]
 
 [tool.uv.sources]
-letta-client = { git = "https://github.com/odellus/letta-python.git", rev = "5a1c107553619dacac5747b08af504eef9487647" }
-letta-evals = { git = "https://github.com/odellus/letta-evals.git", rev = "f22f8fd8500041bcb4407a231590868e7af46cf6" }
+crow-client = { workspace = true }
 agent-client-protocol = { path = "../python-sdk", editable = true }
 
 [project.scripts]
@@ -55,5 +51,5 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: marks tests as integration tests (require running Letta server)",
+    "integration: marks tests as integration tests (require running Crow server)",
 ]

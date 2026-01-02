@@ -1,6 +1,6 @@
 """Tool executor for karla evals.
 
-This module provides the tool execution function used by letta-evals
+This module provides the tool execution function used by crow-evals
 to execute karla tools client-side during evaluation.
 """
 
@@ -28,7 +28,7 @@ def _get_executor() -> ToolExecutor:
 async def execute_tool(tool_name: str, tool_args: dict[str, Any]) -> tuple[str, bool]:
     """Execute a karla tool and return the result.
 
-    This is the entry point called by letta-evals during evaluation.
+    This is the entry point called by crow-evals during evaluation.
 
     Args:
         tool_name: Name of the tool to execute

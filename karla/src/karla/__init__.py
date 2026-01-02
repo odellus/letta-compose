@@ -1,4 +1,4 @@
-"""Karla - A Python coding agent with Letta backend and ACP support."""
+"""Karla - A Python coding agent with Crow backend and ACP support."""
 
 from karla.config import EmbeddingConfig, KarlaConfig, LLMConfig, create_client, load_config
 from karla.context import AgentContext, clear_context, get_context, set_context

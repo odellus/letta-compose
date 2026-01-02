@@ -2,7 +2,7 @@
 
 These tests verify multi-step workflows, tool chaining, and complex scenarios
 that mimic real-world agent behavior. They test the tools at the integration
-level without requiring a Letta server.
+level without requiring a Crow server.
 
 Run with: pytest tests/test_e2e.py -v
 """
@@ -780,11 +780,11 @@ class TestRegistryCompleteness:
             # Name should match tool name
             assert func["name"] == tool.name
 
-    def test_tool_letta_sources_valid(self, registry):
-        """Verify Letta source generation works for all tools."""
+    def test_tool_crow_sources_valid(self, registry):
+        """Verify Crow source generation works for all tools."""
         import warnings
 
-        sources = registry.to_letta_sources()
+        sources = registry.to_crow_sources()
 
         assert len(sources) > 0
 

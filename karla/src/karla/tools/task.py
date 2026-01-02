@@ -168,7 +168,7 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
             agent_ctx = get_context()
         except RuntimeError:
             return ToolResult.error(
-                "No agent context available. Task tool requires Letta integration."
+                "No agent context available. Task tool requires Crow integration."
             )
 
         # Create or get subagent
@@ -233,8 +233,8 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
         description: str,
         working_dir: str,
     ) -> str:
-        """Get or create a Letta agent for the given subagent type."""
-        from karla.letta import register_tools_with_letta
+        """Get or create a Crow agent for the given subagent type."""
+        from karla.crow import register_tools_with_crow
         from karla.tools import create_default_registry
 
         client = agent_ctx.client
@@ -275,7 +275,7 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
 
         # Register tools with the new subagent
         registry = create_default_registry(working_dir)
-        register_tools_with_letta(client, agent.id, registry)
+        register_tools_with_crow(client, agent.id, registry)
 
         return agent.id
 

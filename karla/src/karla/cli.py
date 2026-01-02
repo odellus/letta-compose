@@ -21,7 +21,7 @@ from karla.context import AgentContext, set_context, clear_context
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager, HooksConfig as HooksConfigRuntime
 from karla.hotl import HOTLLoop
-from karla.letta import register_tools_with_letta
+from karla.crow import register_tools_with_crow
 from karla.memory import create_default_memory_blocks, get_block_ids
 from karla.prompts import get_default_system_prompt, get_persona
 from karla.settings import SettingsManager
@@ -80,7 +80,7 @@ def create_agent(client, config: KarlaConfig, name: str | None = None, working_d
     """Create a new Karla agent.
 
     Args:
-        client: Letta client
+        client: Crow client
         config: Karla configuration
         name: Agent name (auto-generated if not provided)
         working_dir: Working directory to inject into system prompt
@@ -141,7 +141,7 @@ def get_or_create_agent(
     """Get an existing agent or create a new one.
 
     Args:
-        client: Letta client
+        client: Crow client
         config: Karla configuration
         settings: Settings manager
         agent_id: Explicit agent ID to use
@@ -223,7 +223,7 @@ async def headless_mode(
     # which breaks KV cache (LCP similarity drops from ~100% to ~26%)
     registry = create_default_registry(working_dir)
     if is_new:
-        register_tools_with_letta(client, agent_id, registry)
+        register_tools_with_crow(client, agent_id, registry)
 
     # Create executor
     executor = ToolExecutor(registry, working_dir)
@@ -411,7 +411,7 @@ async def interactive_mode(
     # Create registry and only register tools for new agents
     registry = create_default_registry(working_dir)
     if is_new:
-        register_tools_with_letta(client, agent_id, registry)
+        register_tools_with_crow(client, agent_id, registry)
 
     # Create executor
     executor = ToolExecutor(registry, working_dir)
@@ -676,7 +676,7 @@ def main():
 
     # Main parser for headless mode
     parser = argparse.ArgumentParser(
-        description="Karla - Python coding agent with Letta backend",
+        description="Karla - Python coding agent with Crow backend",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

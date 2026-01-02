@@ -198,7 +198,7 @@ No system prompt management. Agents are created with minimal system prompts:
 
 ```python
 # From test_letta_e2e.py
-agent = letta_client.agents.create(
+agent = crow_client.agents.create(
     system="You are a coding assistant with file tools...",
     # Basic instructions only
 )

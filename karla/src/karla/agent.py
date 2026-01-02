@@ -10,11 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from letta_client import Letta
+from crow_client import Crow
 
 from karla.config import KarlaConfig
 from karla.executor import ToolExecutor
-from karla.letta import register_tools_with_letta
+from karla.crow import register_tools_with_crow
 from karla.memory import create_default_memory_blocks, get_block_ids
 from karla.prompts import get_default_system_prompt
 from karla.tools import create_default_registry
@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 class KarlaAgent:
     """A Karla coding agent instance.
 
-    This wraps a Letta agent with all the Karla-specific configuration:
+    This wraps a Crow agent with all the Karla-specific configuration:
     - System prompt from prompts/karla_main.md
     - Memory blocks (persona, skills, loaded_skills)
     - Client-side tools
     - Tool executor
     """
 
-    client: Letta
+    client: Crow
     agent_id: str
     name: str
     executor: ToolExecutor
@@ -46,7 +46,7 @@ class KarlaAgent:
 
 
 def create_karla_agent(
-    client: Letta,
+    client: Crow,
     config: KarlaConfig,
     working_dir: str | Path,
     name: Optional[str] = None,
@@ -61,7 +61,7 @@ def create_karla_agent(
     4. Tool executor ready for use
 
     Args:
-        client: Letta client
+        client: Crow client
         config: Karla configuration
         working_dir: Working directory for tool execution
         name: Optional agent name (auto-generated if not provided)
@@ -88,7 +88,7 @@ def create_karla_agent(
         except Exception as e:
             logger.warning("Failed to create memory blocks: %s", e)
 
-    # Create the Letta agent
+    # Create the Crow agent
     agent = client.agents.create(
         name=name,
         system=system_prompt,
@@ -106,7 +106,7 @@ def create_karla_agent(
     executor = ToolExecutor(registry, working_dir)
 
     # Register tools with the agent
-    registered = register_tools_with_letta(client, agent.id, registry)
+    registered = register_tools_with_crow(client, agent.id, registry)
     logger.info("Registered %d tools with agent", len(registered))
 
     return KarlaAgent(
@@ -119,7 +119,7 @@ def create_karla_agent(
 
 
 def get_or_create_agent(
-    client: Letta,
+    client: Crow,
     config: KarlaConfig,
     working_dir: str | Path,
     agent_id: Optional[str] = None,
@@ -128,7 +128,7 @@ def get_or_create_agent(
     """Get an existing agent or create a new one.
 
     Args:
-        client: Letta client
+        client: Crow client
         config: Karla configuration
         working_dir: Working directory for tool execution
         agent_id: Optional agent ID to retrieve
@@ -148,7 +148,7 @@ def get_or_create_agent(
             executor = ToolExecutor(registry, working_dir)
 
             # Re-register tools (they may have changed)
-            register_tools_with_letta(client, agent.id, registry)
+            register_tools_with_crow(client, agent.id, registry)
 
             return KarlaAgent(
                 client=client,
@@ -166,11 +166,11 @@ def get_or_create_agent(
     return create_karla_agent(client, config, working_dir)
 
 
-def delete_agent(client: Letta, agent_id: str) -> bool:
+def delete_agent(client: Crow, agent_id: str) -> bool:
     """Delete a Karla agent.
 
     Args:
-        client: Letta client
+        client: Crow client
         agent_id: Agent ID to delete
 
     Returns:

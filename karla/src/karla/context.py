@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from letta_client import Letta
+    from crow_client import Crow
 
 
 @dataclass
@@ -27,11 +27,11 @@ class SubagentInfo:
 class AgentContext:
     """Shared context for agent execution.
 
-    This holds references to the Letta client, current agent ID,
+    This holds references to the Crow client, current agent ID,
     and any running subagents.
     """
 
-    client: "Letta"
+    client: "Crow"
     agent_id: str
     working_dir: str
     skills_dir: str | None = None

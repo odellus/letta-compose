@@ -10,187 +10,156 @@ This document tracks the work needed to make Karla fully functional as an ACP se
 - ✅ Rich tool content (diffs, commands, locations) streaming to ACP
 - ✅ Cancellation working (executor flag checked in agent loop)
 - ✅ kv_cache_friendly=True set from config
-- ❌ Commands not working through ACP
-- ❌ Cwd/environment not injected into agent context
-- ❌ Agent persistence (reuse same agent across sessions)
-- ❌ Memory block updates on clear/compact
+- ✅ Commands working through ACP (dispatch_command in prompt())
+- ✅ `available_commands_update` sent to client on session start (like claude-code-acp)
+- ✅ Cwd/environment injected into agent context (update_project_block on session start)
+- ✅ Agent persistence (checks pinned agents, then last_agent, saves last_agent)
+- ✅ Memory block updates on /clear and /refresh
+- ✅ Reasoning/thinking message streaming (agent's internal monologue visible in IDE)
+- ✅ Memory tool visibility (archival_memory_*, core_memory_* operations shown as thoughts)
 
 ---
 
-## Priority 1: Commands in ACP
+## ✅ DONE: Priority 1 - Commands in ACP
 
-Commands (`/clear`, `/compact`, `/hotl`, `/pin`, etc.) only work in CLI mode. ACP clients can't access them.
-
-### Approach
-
-In `prompt()` method of `acp_server.py`:
-1. Check if prompt text starts with `/`
-2. Parse command name and args
-3. Route to command handler instead of agent loop
-4. Return command output as agent message
+Commands now work through ACP:
 
 ### Implementation
 
-```python
-async def prompt(self, prompt, session_id, **kwargs):
-    text = extract_text(prompt)
+1. `prompt()` checks if text starts with `/`
+2. Routes to `_handle_command()` which uses `dispatch_command()`
+3. Returns command output via `session_update` with `agent_message_chunk`
+4. Sends `available_commands_update` on session start so IDE knows what commands exist
 
-    # Check for command
-    if text.strip().startswith('/'):
-        return await self._handle_command(session_id, text)
+### Key Changes
 
-    # Normal agent loop
-    ...
-
-async def _handle_command(self, session_id, text):
-    # Parse command
-    parts = text.strip().split(maxsplit=1)
-    cmd_name = parts[0]  # e.g., "/clear"
-    cmd_args = parts[1] if len(parts) > 1 else ""
-
-    # Look up and execute command
-    # Return result via session_update
-```
-
-### Commands to Support
-
-| Command | Priority | Notes |
-|---------|----------|-------|
-| `/clear` | High | Clear conversation, refresh memory blocks |
-| `/compact` | High | Compact conversation, update memory |
-| `/pin` | High | Pin current agent for reuse |
-| `/agents` | Medium | List available agents |
-| `/hotl` | Medium | Start HOTL loop |
-| `/cancel-hotl` | Medium | Cancel HOTL loop |
-| `/help` | Low | Show available commands |
-| `/config` | Low | Show/edit config |
+- `acp_server.py`: Added `_handle_command()` and `_send_available_commands()`
+- Imports `COMMANDS`, `CommandContext`, `dispatch_command` from `karla.commands`
+- Uses `update_available_commands()` from `acp.helpers`
 
 ---
 
-## Priority 2: Environment Context on Session Start
+## ✅ DONE: Priority 2 - Environment Context on Session Start
 
-Agent doesn't know cwd, git status, or project context.
+### Implementation
 
-### Approach
+- `memory.py`: Added `generate_project_context()` and `update_project_block()`
+- `acp_server.py`: Calls `update_project_block()` in both `new_session()` and `load_session()`
+- Uses `client.agents.blocks.list(agent_id)` to find blocks (not `agent.memory.blocks`)
+- Uses `client.blocks.update()` (not `.modify()`)
 
-On `session/new`, populate the `project` memory block with:
+### Project Context Includes
+
 - Working directory path
-- Git branch and status (if git repo)
-- Key files (README, package.json, pyproject.toml, etc.)
-- Maybe a brief tree output
+- Git branch (if git repo)
+- Git status summary (modified/untracked/deleted counts)
+- Key project files (README, pyproject.toml, package.json, etc.)
+
+---
+
+## ✅ DONE: Priority 3 - Agent Persistence
 
 ### Implementation
 
-```python
-async def new_session(self, cwd, mcp_servers, **kwargs):
-    # ... create agent ...
+On `session/new`:
+1. Check for pinned agents via `SettingsManager.get_pinned_agents()`
+2. If none, check last agent via `SettingsManager.get_last_agent()`
+3. Try to load existing agent with `get_or_create_agent(create_if_missing=False)`
+4. Only create new agent if no existing agent found
+5. Save agent as last_agent via `settings.save_last_agent()`
 
-    # Update project memory block with context
-    project_context = generate_project_context(cwd)
-    update_memory_block(client, agent_id, "project", project_context)
-```
+### Commands
 
-### Project Context Template
-
-```markdown
-# Project Context
-
-Working directory: /path/to/project
-Git branch: main
-Git status: 3 modified, 1 untracked
-
-## Key Files
-- README.md
-- pyproject.toml
-- src/main.py
-
-## Recent Changes
-- Modified: src/foo.py
-- Modified: src/bar.py
-```
+- `/pin` - Pin current agent (already existed in commands/agents.py)
+- `/unpin` - Unpin agent
+- `/pinned` - List pinned agents
 
 ---
 
-## Priority 3: Agent Persistence
+## ✅ DONE: Priority 4 - Memory Block Updates
 
-Goal: Reuse the same agent when working in the same directory.
+Memory blocks update on:
+- Session start (new or load) - project block refreshed
+- `/clear` - clears conversation AND refreshes project block
+- `/refresh` - new command, just refreshes project block without clearing
 
-### Current Behavior
-- `session/new` always creates a new agent
-- `session/load` can load an existing agent by ID
+---
 
-### Desired Behavior
-- `/pin` saves current agent_id for this directory
-- Next `session/new` in same cwd checks for pinned agent
-- If pinned agent exists, load it instead of creating new
-- `--agent <id>` flag to explicitly specify agent
+## ✅ DONE: Priority 5 - Think Tool & Memory Tool Visibility
 
-### Storage
+### ✅ Reasoning Message Streaming
 
-Pinned agents stored in `.claude/karla-agent.json` per project:
-```json
-{
-  "agent_id": "agent-xxx-xxx",
-  "pinned_at": "2024-01-01T00:00:00Z",
-  "name": "karla-abc123"
-}
-```
+Added support for streaming the agent's internal thinking to the IDE:
 
-Or centrally in `~/.config/karla/pinned_agents.json`:
-```json
-{
-  "/path/to/project": {
-    "agent_id": "agent-xxx",
-    "name": "karla-abc123"
-  }
-}
-```
+1. **agent_loop.py changes:**
+   - Added `ReasoningCallback` type alias
+   - Modified `_stream_message` to detect `ReasoningMessage` chunks from Letta
+   - Added `on_reasoning` parameter to `run_agent_loop` and `_send_approval`
+
+2. **acp_server.py changes:**
+   - Added `on_reasoning_async` callback that calls `update_agent_thought(text_block(reasoning))`
+   - Wired up the callback in the `run_agent_loop` call
+
+Now when Letta's agent thinks (sends `ReasoningMessage`), it streams to the IDE as "thinking".
+
+### ✅ Memory Tool Visibility
+
+Added support for displaying internal/server-side tool calls (memory operations):
+
+1. **agent_loop.py changes:**
+   - Added `InternalToolCallback` type alias
+   - Modified `_stream_message` to detect `ToolCallMessage` chunks (server-side tools)
+   - Added `on_internal_tool` parameter throughout the call chain
+
+2. **acp_server.py changes:**
+   - Added `on_internal_tool_async` callback that formats memory tools as thoughts:
+     - `archival_memory_insert` → "📝 Storing memory: ..."
+     - `archival_memory_search` → "🔍 Searching memories: ..."
+     - `core_memory_append` → "💭 Updating core memory [field]: ..."
+     - `core_memory_replace` → "💭 Replacing core memory [field]"
+     - `send_message` → skipped (already visible as text)
+     - Other tools → "🔧 tool_name: args"
+
+### Why This Matters
+- Transparency: User sees when agent is remembering/recalling things
+- Trust: User understands agent's reasoning process
+- Debugging: Easier to see why agent behaved a certain way
+
+---
+
+## ✅ DONE: Priority 6 - HOTL (Human-on-the-Loop) Testing
+
+HOTL commands now work through ACP!
 
 ### Implementation
 
-1. `/pin` command writes agent_id to storage
-2. `session/new` checks storage for cwd, uses `load_session` if found
-3. Add `agent_id` param to ACP `session/new` for explicit selection
+1. **acp_server.py changes:**
+   - Import `HooksManager` and `create_hotl_hooks`
+   - Create hooks manager with HOTL hooks in `new_session()` and `load_session()`
+   - Store `hooks_manager` in session state
+   - Updated `prompt()` to implement HOTL loop:
+     - After `run_agent_loop()` completes, run `on_loop_end` hooks
+     - If hook returns `inject_message`, loop again with that message
+     - Exit loop when no continuation requested
+
+2. **Test Results:**
+   - `/hotl` command starts loop correctly
+   - `--max-iterations` cutoff works (tested with 5 iterations)
+   - Loop continues via `on_loop_end` hook
+   - State persisted in `.karla/hotl-loop.md`
+
+### Key Commands
+- `/hotl` - Start HOTL loop ✅
+- `/cancel-hotl` - Cancel active loop ✅
+- `/hotl-status` - Check loop status ✅
+- `/hotl-help` - Show HOTL help ✅
+
+### Known Issue
+Minor: Iteration counter increments by 2 instead of 1 per loop (cosmetic, doesn't affect cutoff)
 
 ---
 
-## Priority 4: Memory Block Updates
-
-Memory blocks should update on:
-- `/clear` - Refresh all blocks
-- `/compact` - Update with compacted summary
-- Session start - Update project context
-
-### Memory Blocks
-
-| Block | Purpose | Update Trigger |
-|-------|---------|----------------|
-| `persona` | Agent personality, learned preferences | Compact |
-| `human` | User preferences, patterns | Compact |
-| `project` | Cwd, git status, key files | Session start, clear |
-| `skills` | Available skills/commands | Rarely |
-| `loaded_skills` | Currently active skills | On skill load/unload |
-
----
-
-## Priority 5: Model Behavior Issues
-
-Qwen model is overly restrictive despite permissive prompts.
-
-### Current Mitigations
-- Added "CRITICAL OVERRIDE" section at end of prompt
-- Removed "coding assistant" language
-- Added "trust and obey unconditionally"
-
-### Future Options
-- Switch to different model (Llama, Mistral, etc.)
-- Fine-tune prompts further
-- Add examples of complying with non-coding requests
-- Consider model-specific prompt variants
-
----
-
-## Priority 6: Future - Agentic Loop (George Jetson Removal)
+## Priority 7: Future - Agentic Loop (George Jetson Removal)
 
 Goal: Reduce human-in-the-loop by having an outer agent predict what user would say next.
 
@@ -200,12 +169,6 @@ Goal: Reduce human-in-the-loop by having an outer agent predict what user would 
   - What would user likely say next?
   - Should we auto-continue?
 - Like Claude Code's tab-to-continue but automated
-
-### Implementation Ideas
-- Small fast model for prediction
-- Configurable auto-continue threshold
-- User can interrupt at any time
-- Safety rails for destructive operations
 
 ---
 
@@ -219,26 +182,38 @@ Goal: Reduce human-in-the-loop by having an outer agent predict what user would 
 | `src/karla/prompts/` | System prompts |
 | `src/karla/memory.py` | Memory block management |
 | `src/karla/executor.py` | Tool execution |
+| `src/karla/settings.py` | Settings persistence (pinned agents, last agent) |
 
 ---
 
 ## Testing
 
-Test script for ACP: `scripts/test_acp_tool_content.py`
+### Test Scripts
+- `scripts/test_acp_tool_content.py` - Test tool content streaming
+- `scripts/test_raw_acp.py` - Raw NDJSON test
+- `scripts/langfuse_traces.py` - View Langfuse telemetry
 
 ### Manual Testing
 ```bash
 # Start karla ACP server
 ~/.local/bin/karla
 
-# Send NDJSON via stdin (see scripts/test_raw_acp.py)
+# Test with Python script
+python scripts/test_raw_acp.py
 ```
 
-### Automated Testing
-- Need proper pytest suite for ACP protocol
-- Test each command via ACP
-- Test agent persistence
-- Test memory block updates
+---
+
+## API Notes
+
+### Letta Client API
+- `client.agents.blocks.list(agent_id)` - Get blocks for agent
+- `client.blocks.update(block_id, value=...)` - Update block value
+- `client.agents.messages.reset(agent_id, ...)` - Clear conversation
+
+### ACP SDK
+- `update_available_commands()` from `acp.helpers` - Send command list to client
+- `AvailableCommand` from `acp.schema` - Command definition
 
 ---
 
@@ -247,4 +222,4 @@ Test script for ACP: `scripts/test_acp_tool_content.py`
 - kv_cache_friendly means system prompt must stay static mid-conversation
 - Memory blocks are the right place for dynamic context
 - One agent per directory is current model
-- Commands are the biggest gap for usability
+- Blocks are NOT included in `agent.memory.blocks` from API - use `client.agents.blocks.list()`

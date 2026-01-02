@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Goals // Control</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --bg-primary: #0a0c0f;
+                --bg-secondary: #12151a;
+                --bg-tertiary: #1a1e25;
+                --border: #2a2f3a;
+                --border-accent: #3d4452;
+                --text-primary: #e8eaed;
+                --text-secondary: #9aa0a9;
+                --text-muted: #5f6672;
+                --accent-amber: #f59e0b;
+                --accent-amber-dim: #78500a;
+                --accent-emerald: #10b981;
+                --accent-emerald-dim: #064e3b;
+                --accent-sky: #0ea5e9;
+                --accent-sky-dim: #0c4a6e;
+                --accent-rose: #f43f5e;
+                --accent-rose-dim: #881337;
+                --accent-violet: #8b5cf6;
+                --accent-violet-dim: #4c1d95;
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: "JetBrains Mono", monospace;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                min-height: 100vh;
+                line-height: 1.6;
+            }
+
+            /* Subtle grid background */
+            body::before {
+                content: "";
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-image:
+                    linear-gradient(var(--border) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+                background-size: 60px 60px;
+                opacity: 0.15;
+                pointer-events: none;
+                z-index: 0;
+            }
+
+            .container {
+                max-width: 1400px;
+                margin: 0 auto;
+                padding: 2rem;
+                position: relative;
+                z-index: 1;
+            }
+
+            header {
+                margin-bottom: 3rem;
+                padding-bottom: 1.5rem;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .header-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 1rem;
+            }
+
+            h1 {
+                font-family: "Space Grotesk", sans-serif;
+                font-size: 2.5rem;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+                background: linear-gradient(
+                    135deg,
+                    var(--text-primary) 0%,
+                    var(--text-secondary) 100%
+                );
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+
+            .timestamp {
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                text-align: right;
+            }
+
+            .timestamp span {
+                display: block;
+                color: var(--accent-emerald);
+            }
+
+            .stats-bar {
+                display: flex;
+                gap: 2rem;
+                font-size: 0.8rem;
+            }
+
+            .stat {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .stat-label {
+                color: var(--text-muted);
+            }
+
+            .stat-value {
+                color: var(--accent-amber);
+                font-weight: 500;
+            }
+
+            .goals-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+                gap: 1.5rem;
+            }
+
+            .category {
+                background: var(--bg-secondary);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                overflow: hidden;
+                transition: border-color 0.2s ease;
+            }
+
+            .category:hover {
+                border-color: var(--border-accent);
+            }
+
+            .category-header {
+                padding: 1rem 1.25rem;
+                border-bottom: 1px solid var(--border);
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+            }
+
+            .category-icon {
+                width: 10px;
+                height: 10px;
+                border-radius: 2px;
+            }
+
+            .category-title {
+                font-family: "Space Grotesk", sans-serif;
+                font-size: 0.9rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--text-secondary);
+            }
+
+            .category-count {
+                margin-left: auto;
+                font-size: 0.7rem;
+                color: var(--text-muted);
+                background: var(--bg-tertiary);
+                padding: 0.2rem 0.5rem;
+                border-radius: 4px;
+            }
+
+            .goals-list {
+                padding: 0.75rem;
+            }
+
+            .goal-item {
+                display: flex;
+                align-items: flex-start;
+                gap: 0.75rem;
+                padding: 0.75rem;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: background 0.15s ease;
+            }
+
+            .goal-item:hover {
+                background: var(--bg-tertiary);
+            }
+
+            .goal-checkbox {
+                width: 18px;
+                height: 18px;
+                border: 2px solid var(--border-accent);
+                border-radius: 4px;
+                flex-shrink: 0;
+                margin-top: 2px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.15s ease;
+                cursor: pointer;
+            }
+
+            .goal-item.completed .goal-checkbox {
+                background: var(--accent-emerald);
+                border-color: var(--accent-emerald);
+            }
+
+            .goal-checkbox svg {
+                width: 12px;
+                height: 12px;
+                opacity: 0;
+                stroke: var(--bg-primary);
+                stroke-width: 3;
+                transition: opacity 0.15s ease;
+            }
+
+            .goal-item.completed .goal-checkbox svg {
+                opacity: 1;
+            }
+
+            .goal-content {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .goal-title {
+                font-size: 0.85rem;
+                color: var(--text-primary);
+                margin-bottom: 0.25rem;
+                transition: color 0.15s ease;
+            }
+
+            .goal-item.completed .goal-title {
+                color: var(--text-muted);
+                text-decoration: line-through;
+            }
+
+            .goal-meta {
+                font-size: 0.7rem;
+                color: var(--text-muted);
+            }
+
+            .goal-tag {
+                display: inline-block;
+                padding: 0.15rem 0.4rem;
+                border-radius: 3px;
+                font-size: 0.65rem;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+            }
+
+            /* Category colors */
+            .cat-software .category-icon {
+                background: var(--accent-violet);
+            }
+            .cat-software .goal-tag {
+                background: var(--accent-violet-dim);
+                color: var(--accent-violet);
+            }
+
+            .cat-robotics .category-icon {
+                background: var(--accent-sky);
+            }
+            .cat-robotics .goal-tag {
+                background: var(--accent-sky-dim);
+                color: var(--accent-sky);
+            }
+
+            .cat-infra .category-icon {
+                background: var(--accent-amber);
+            }
+            .cat-infra .goal-tag {
+                background: var(--accent-amber-dim);
+                color: var(--accent-amber);
+            }
+
+            .cat-health .category-icon {
+                background: var(--accent-emerald);
+            }
+            .cat-health .goal-tag {
+                background: var(--accent-emerald-dim);
+                color: var(--accent-emerald);
+            }
+
+            .cat-farm .category-icon {
+                background: var(--accent-rose);
+            }
+            .cat-farm .goal-tag {
+                background: var(--accent-rose-dim);
+                color: var(--accent-rose);
+            }
+
+            /* Progress indicator for daily goals */
+            .progress-ring {
+                width: 36px;
+                height: 36px;
+                flex-shrink: 0;
+            }
+
+            .progress-ring circle {
+                fill: none;
+                stroke-width: 3;
+            }
+
+            .progress-ring .bg {
+                stroke: var(--bg-tertiary);
+            }
+
+            .progress-ring .progress {
+                stroke: var(--accent-emerald);
+                stroke-linecap: round;
+                transform: rotate(-90deg);
+                transform-origin: 50% 50%;
+                transition: stroke-dashoffset 0.3s ease;
+            }
+
+            .progress-value {
+                font-size: 0.6rem;
+                fill: var(--text-secondary);
+                text-anchor: middle;
+                dominant-baseline: middle;
+            }
+
+            /* Footer */
+            footer {
+                margin-top: 3rem;
+                padding-top: 1.5rem;
+                border-top: 1px solid var(--border);
+                text-align: center;
+                font-size: 0.7rem;
+                color: var(--text-muted);
+            }
+
+            footer span {
+                color: var(--accent-amber);
+            }
+
+            /* Animations */
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .category {
+                animation: fadeIn 0.4s ease forwards;
+                opacity: 0;
+            }
+
+            .category:nth-child(1) {
+                animation-delay: 0.05s;
+            }
+            .category:nth-child(2) {
+                animation-delay: 0.1s;
+            }
+            .category:nth-child(3) {
+                animation-delay: 0.15s;
+            }
+            .category:nth-child(4) {
+                animation-delay: 0.2s;
+            }
+            .category:nth-child(5) {
+                animation-delay: 0.25s;
+            }
+
+            @media (max-width: 768px) {
+                .container {
+                    padding: 1rem;
+                }
+
+                h1 {
+                    font-size: 1.75rem;
+                }
+
+                .goals-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .stats-bar {
+                    flex-wrap: wrap;
+                    gap: 1rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <div class="header-top">
+                    <h1>Goals // Control</h1>
+                    <div class="timestamp">
+                        <span id="currentDate"></span>
+                        <span id="currentTime"></span>
+                    </div>
+                </div>
+                <div class="stats-bar">
+                    <div class="stat">
+                        <span class="stat-label">Total:</span>
+                        <span class="stat-value" id="totalGoals">12</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Completed:</span>
+                        <span class="stat-value" id="completedGoals">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Progress:</span>
+                        <span class="stat-value" id="progressPercent">0%</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="goals-grid">
+                <!-- Software / AI -->
+                <div class="category cat-software">
+                    <div class="category-header">
+                        <div class="category-icon"></div>
+                        <span class="category-title">Software / AI</span>
+                        <span class="category-count">2 goals</span>
+                    </div>
+                    <div class="goals-list">
+                        <div class="goal-item" data-id="1">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Create crow as refactor/rebrand from letta
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">agent</span>
+                                    autonomous coding system
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="2">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Create karla as coding agent to replace
+                                    letta-code
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">agent</span> code
+                                    generation
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Robotics / Sim2Real -->
+                <div class="category cat-robotics">
+                    <div class="category-header">
+                        <div class="category-icon"></div>
+                        <span class="category-title">Robotics / Sim2Real</span>
+                        <span class="category-count">3 goals</span>
+                    </div>
+                    <div class="goals-list">
+                        <div class="goal-item" data-id="3">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Camera alignment for sim2real
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">calibration</span>
+                                    vision pipeline
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="4">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    IRL research and sim2real transfer
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">research</span>
+                                    inverse reinforcement learning
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="5">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Purchase OpenArm bimanual robot
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">hardware</span> $5k
+                                    investment
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Infrastructure -->
+                <div class="category cat-infra">
+                    <div class="category-header">
+                        <div class="category-icon"></div>
+                        <span class="category-title">Infrastructure</span>
+                        <span class="category-count">2 goals</span>
+                    </div>
+                    <div class="goals-list">
+                        <div class="goal-item" data-id="6">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    AMD Driver/ROCm development
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">gpu</span> get shared
+                                    mem working on local machine
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="7">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Build office/apartment building
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">construction</span>
+                                    considering shipping containers
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Health / Daily -->
+                <div class="category cat-health">
+                    <div class="category-header">
+                        <div class="category-icon"></div>
+                        <span class="category-title">Health / Daily</span>
+                        <span class="category-count">3 goals</span>
+                    </div>
+                    <div class="goals-list">
+                        <div class="goal-item" data-id="8">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Drink more water/tea/sparkling water
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">daily</span>
+                                    hydration habit
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="9">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Get steps early daily — 10k target
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">daily</span> morning
+                                    priority
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="10">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Sweat on elliptical
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">daily</span> cardio
+                                    session
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agriculture -->
+                <div class="category cat-farm">
+                    <div class="category-header">
+                        <div class="category-icon"></div>
+                        <span class="category-title">Agriculture</span>
+                        <span class="category-count">2 goals</span>
+                    </div>
+                    <div class="goals-list">
+                        <div class="goal-item" data-id="11">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    House plant care plan + reminders
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">plants</span> custom
+                                    schedules per species
+                                </div>
+                            </div>
+                        </div>
+                        <div class="goal-item" data-id="12">
+                            <div class="goal-checkbox">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <polyline
+                                        points="20 6 9 17 4 12"
+                                    ></polyline>
+                                </svg>
+                            </div>
+                            <div class="goal-content">
+                                <div class="goal-title">
+                                    Get hydroponics setup working
+                                </div>
+                                <div class="goal-meta">
+                                    <span class="goal-tag">hydro</span>
+                                    strawberry system
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer>
+                Live Oak, FL · 20 acres · <span>building infrastructure</span>
+            </footer>
+        </div>
+
+        <script>
+            // Update timestamp
+            function updateTime() {
+                const now = new Date();
+                document.getElementById("currentDate").textContent =
+                    now.toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                    });
+                document.getElementById("currentTime").textContent =
+                    now.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                    });
+            }
+            updateTime();
+            setInterval(updateTime, 1000);
+
+            // Load saved state
+            const savedState = JSON.parse(
+                localStorage.getItem("goalsState") || "{}",
+            );
+
+            // Apply saved state
+            document.querySelectorAll(".goal-item").forEach((item) => {
+                const id = item.dataset.id;
+                if (savedState[id]) {
+                    item.classList.add("completed");
+                }
+            });
+
+            // Update stats
+            function updateStats() {
+                const total = document.querySelectorAll(".goal-item").length;
+                const completed = document.querySelectorAll(
+                    ".goal-item.completed",
+                ).length;
+                const percent = Math.round((completed / total) * 100);
+
+                document.getElementById("totalGoals").textContent = total;
+                document.getElementById("completedGoals").textContent =
+                    completed;
+                document.getElementById("progressPercent").textContent =
+                    percent + "%";
+            }
+            updateStats();
+
+            // Toggle completion
+            document.querySelectorAll(".goal-item").forEach((item) => {
+                item.addEventListener("click", () => {
+                    item.classList.toggle("completed");
+
+                    // Save state
+                    const state = {};
+                    document.querySelectorAll(".goal-item").forEach((g) => {
+                        if (g.classList.contains("completed")) {
+                            state[g.dataset.id] = true;
+                        }
+                    });
+                    localStorage.setItem("goalsState", JSON.stringify(state));
+
+                    updateStats();
+                });
+            });
+        </script>
+    </body>
+</html>

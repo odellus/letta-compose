@@ -6,7 +6,7 @@ Creates the test environment before running evaluations.
 import os
 from pathlib import Path
 
-from letta_evals.decorators import suite_setup
+from crow_evals.decorators import suite_setup
 
 
 @suite_setup

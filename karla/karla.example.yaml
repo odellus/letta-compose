@@ -1,7 +1,7 @@
 # Karla Configuration
 # Copy this to karla.yaml or ~/.config/karla/config.yaml
 
-# Letta server connection
+# Crow server connection
 server:
   base_url: http://localhost:8283
   # Timeout in seconds for LLM requests. Omit or set to null for no timeout.

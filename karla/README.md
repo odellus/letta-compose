@@ -13,7 +13,7 @@ uv pip install -e .
 uv pip install -e ".[dev]"
 ```
 
-Requires a running Letta server (default: `http://localhost:8283`).
+Requires a running Crow server (default: `http://localhost:9999`).
 
 ## Configuration
 
@@ -36,7 +36,7 @@ embedding:
   model: ollama/mxbai-embed-large:latest
 
 server:
-  base_url: http://localhost:8283
+  base_url: http://localhost:9999
   timeout: null  # no timeout for slow local LLMs
 ```
 

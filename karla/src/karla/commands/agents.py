@@ -8,7 +8,7 @@ from karla.commands.context import CommandContext
 async def cmd_new(ctx: CommandContext) -> str:
     """Create a new agent and switch to it."""
     from karla.cli import create_agent, find_config
-    from karla.letta import register_tools_with_letta
+    from karla.crow import register_tools_with_crow
     from karla.tools import create_default_registry
 
     config = find_config()
@@ -17,7 +17,7 @@ async def cmd_new(ctx: CommandContext) -> str:
 
     # Register tools for the new agent
     registry = create_default_registry(ctx.working_dir)
-    register_tools_with_letta(ctx.client, new_id, registry)
+    register_tools_with_crow(ctx.client, new_id, registry)
 
     # Update context to use new agent
     ctx.agent_id = new_id

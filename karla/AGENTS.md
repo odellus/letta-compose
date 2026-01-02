@@ -2,7 +2,7 @@
 
 ## Overview
 
-Karla is a Python coding agent built on the Letta framework. It provides Claude Code-like functionality (file operations, shell execution, code search) with Letta's stateful agent capabilities (persistent memory, conversation history, tool management).
+Karla is a Python coding agent built on the Crow framework. It provides Claude Code-like functionality (file operations, shell execution, code search) with Letta's stateful agent capabilities (persistent memory, conversation history, tool management).
 
 The key architectural decision: **tools execute client-side**. Letta manages the agent's state and LLM interactions, but when the agent calls a tool like `Read` or `Bash`, the actual execution happens on the client machine. This is the HOTL (Humans Out of The Loop) pattern - tools auto-execute without approval prompts.
 
@@ -121,7 +121,7 @@ def to_openai_schema(self, strict: bool = True) -> dict:
 
 ### Prerequisites
 
-- Letta server running on `localhost:8283`
+- Crow server running on `localhost:9999`
 - LLM server (llama.cpp) on `coast-after-3:1234` or configure your own
 - Python 3.11+, uv package manager
 
@@ -153,7 +153,7 @@ target:
   kind: letta_agent
   agent_script: create_agent.py:create_karla_agent
   tool_executor_script: tool_executor.py:execute_tool  # Client-side execution
-  base_url: http://localhost:8283
+  base_url: http://localhost:9999
   max_tool_iterations: 20
 
 graders:
@@ -252,6 +252,6 @@ The strict mode schema format is critical for llama.cpp - without it, grammar pa
 ## Related Projects
 
 - [letta](https://github.com/letta-ai/letta) - The agent framework
-- [letta-python](https://github.com/letta-ai/letta-python) - Python SDK
+- [crow-python](https://github.com/letta-ai/crow-python) - Python SDK
 - [letta-code](https://github.com/letta-ai/letta-code) - Reference coding agent (TypeScript)
 - [letta-evals](https://github.com/letta-ai/letta-evals) - Evaluation framework (our fork)

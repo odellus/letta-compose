@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Thomas's Plant Care Guide</title>
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                background: #f5f5f5;
+                padding: 20px;
+                line-height: 1.4;
+            }
+            h1 {
+                text-align: center;
+                color: #2d5a27;
+                margin-bottom: 10px;
+                font-size: 24px;
+            }
+            .subtitle {
+                text-align: center;
+                color: #666;
+                margin-bottom: 20px;
+                font-size: 12px;
+            }
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 15px;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .plant-card {
+                background: white;
+                border-radius: 10px;
+                padding: 15px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                border-left: 5px solid #4caf50;
+                page-break-inside: avoid;
+            }
+            .plant-image {
+                width: 100%;
+                height: 180px;
+                object-fit: cover;
+                border-radius: 8px;
+                margin-bottom: 12px;
+            }
+            .plant-name {
+                font-size: 16px;
+                font-weight: bold;
+                color: #2d5a27;
+                margin-bottom: 8px;
+                border-bottom: 1px solid #e0e0e0;
+                padding-bottom: 5px;
+            }
+            .care-row {
+                display: flex;
+                align-items: flex-start;
+                margin: 8px 0;
+                font-size: 13px;
+            }
+            .icon {
+                width: 24px;
+                height: 24px;
+                margin-right: 10px;
+                flex-shrink: 0;
+            }
+            .care-info {
+                flex: 1;
+            }
+            .care-label {
+                font-weight: bold;
+                color: #555;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .care-value {
+                color: #333;
+            }
+            .difficulty {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 10px;
+                font-weight: bold;
+                margin-top: 8px;
+            }
+            .easy {
+                background: #c8e6c9;
+                color: #2e7d32;
+            }
+            .moderate {
+                background: #fff3e0;
+                color: #ef6c00;
+            }
+            .demanding {
+                background: #ffcdd2;
+                color: #c62828;
+            }
+
+            .legend {
+                max-width: 1200px;
+                margin: 0 auto 20px;
+                padding: 15px;
+                background: white;
+                border-radius: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                font-size: 12px;
+            }
+            .legend-item {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            /* Print styles */
+            @media print {
+                body {
+                    background: white;
+                    padding: 10px;
+                }
+                .plant-card {
+                    box-shadow: none;
+                    border: 1px solid #ddd;
+                }
+                .grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+
+            .water-high {
+                border-left-color: #2196f3;
+            }
+            .water-medium {
+                border-left-color: #4caf50;
+            }
+            .water-low {
+                border-left-color: #ff9800;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🌿 Thomas's Plant Care Guide</h1>
+        <p class="subtitle">Lowe's Order - December 2025 | 12 Plants Total</p>
+
+        <div class="legend">
+            <div class="legend-item">
+                <span class="difficulty easy">EASY</span> Low maintenance
+            </div>
+            <div class="legend-item">
+                <span class="difficulty moderate">MODERATE</span> Some attention
+                needed
+            </div>
+            <div class="legend-item">
+                <span class="difficulty demanding">DEMANDING</span> Needs
+                consistent care
+            </div>
+            <div class="legend-item">💧 = Water needs | ☀️ = Light needs</div>
+        </div>
+
+        <div class="grid">
+            <!-- Spider Plant -->
+            <div class="plant-card water-medium">
+                <img
+                    class="plant-image"
+                    src="https://www.provenwinners.com/sites/provenwinners.com/files/imagecache/500x500/ifa_upload/chlorophytum_white_edge_-_2021_ps_intro.jpg"
+                    alt="White Spider Plant"
+                />
+                <div class="plant-name">🕷️ White Spider Plant (6")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Once weekly. Let top 1-2" dry between waterings.
+                            Don't let sit in water.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect (4-6 hrs). NO direct sun - will
+                            scorch leaves.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Brown tips = fluoride in water. Use
+                            filtered/rainwater. Likes humidity.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Fern Accent -->
+            <div class="plant-card water-high">
+                <img
+                    class="plant-image"
+                    src="https://costafarms.com/cdn/shop/articles/Boston-Fern-Costa-Farms-Header-Shot_5a86e1ce-5434-4af3-bd4b-7914cab25f95_1000x1000.jpg?v=1758825966"
+                    alt="Fern Accent Shrub"
+                />
+                <div class="plant-name">🌿 Fern Accent Shrub (1.72 gal)</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Keep soil consistently moist. Never let dry out
+                            completely. Check daily.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Medium to bright indirect. No direct sun. Tolerates
+                            low light.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Loves humidity! Mist regularly or use pebble tray.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty moderate">MODERATE</span>
+            </div>
+
+            <!-- Cat Palm -->
+            <div class="plant-card water-high">
+                <img
+                    class="plant-image"
+                    src="https://www.livelyroot.com/cdn/shop/files/PL_CP_10IN1_studio.jpg?v=1758097485"
+                    alt="Cat Palm"
+                />
+                <div class="plant-name">🌴 Cat Palm (10")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Keep evenly moist but not soggy. Let top 1" dry.
+                            Doesn't like dry soil!
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect light. One of the easiest palms! No
+                            direct hot sun.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Hardy! Pet-safe. Watch for spider mites if too dry.
+                            65-80°F ideal.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Money Tree 1 -->
+            <div class="plant-card water-medium">
+                <img
+                    class="plant-image"
+                    src="https://leafyplace.com/wp-content/uploads/2019/10/post1451.jpg"
+                    alt="Pachira Money Tree"
+                />
+                <div class="plant-name">💰 Pachira Money Tree (10")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Every 1-2 weeks. Let top 1-2" dry. Stores water in
+                            trunk - don't overwater!
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect. Rotate every 2 weeks for even
+                            growth. No direct sun.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Don't move frequently - causes leaf drop. 65-75°F.
+                            Non-toxic to pets.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Macho Fern -->
+            <div class="plant-card water-high">
+                <img
+                    class="plant-image"
+                    src="https://costafarms.com/cdn/shop/files/Macho-Fern-Costa-Farms-Header1_1000x1000.jpg?v=1680791598"
+                    alt="Macho Fern"
+                />
+                <div class="plant-name">🌿 Macho Fern (10")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Keep soil moist! Water every 5-7 days. #1 killer is
+                            dry soil. Check daily.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Medium to bright indirect. No direct sun - will burn
+                            fronds.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            HIGH humidity needed! Mist daily or pebble tray. Can
+                            grow 4ft fronds!
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty demanding">DEMANDING</span>
+            </div>
+
+            <!-- Ponytail Palm -->
+            <div class="plant-card water-low">
+                <img
+                    class="plant-image"
+                    src="https://costafarms.com/cdn/shop/articles/Ponytail-Palm--Beaucarnea--Costa-Farms-Houseplant_2163bdff-ff79-436c-ac56-e6f64c09a70e_1000x1000.jpg?v=1758828441"
+                    alt="Ponytail Palm"
+                />
+                <div class="plant-name">🦣 Ponytail Palm (6")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Every 2-3 weeks! Let soil dry completely. Stores
+                            water in bulb trunk.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect to some direct sun. South/west
+                            window ideal. Very tolerant.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            DROUGHT TOLERANT! Actually a succulent. Non-toxic.
+                            "Plant of steel"
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Braided Money Tree -->
+            <div class="plant-card water-medium">
+                <img
+                    class="plant-image"
+                    src="https://leafyplace.com/wp-content/uploads/2019/10/post1451.jpg"
+                    alt="Braided Money Tree"
+                />
+                <div class="plant-name">💰 Braided Money Tree (10")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Every 1-2 weeks. Let top 1-2" dry. Stores water in
+                            trunk - don't overwater!
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect. Rotate every 2 weeks for even
+                            growth. No direct sun.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Same care as other Money Tree. Likes 50-60%
+                            humidity. Pet-safe.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Bamboo Palm -->
+            <div class="plant-card water-medium">
+                <img
+                    class="plant-image"
+                    src="https://eit-planttoolbox-prod.s3.amazonaws.com/media/images/20250724_110937_Cham_Dxs5CTFy6hjS.jpeg"
+                    alt="Bamboo Palm"
+                />
+                <div class="plant-name">🎋 Bamboo Palm (10")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            When top 1-2" dry. Keep slightly moist.
+                            Well-draining soil essential.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Low to bright indirect. Very adaptable! One of best
+                            low-light palms.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Great air purifier. Pet-safe. Watch for spider
+                            mites. 65-80°F.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Majesty Palm -->
+            <div class="plant-card water-high">
+                <img
+                    class="plant-image"
+                    src="https://costafarms.com/cdn/shop/articles/Majesty-Palm-Costa-Farms-Houseplant_520x500_602c6ca3-80e7-4559-a47c-03cd27ff0eab_1000x1000.jpg?v=1758827628"
+                    alt="Majesty Palm"
+                />
+                <div class="plant-name">👑 Majesty Palm (10")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            When top 50% dry. Likes consistently moist soil.
+                            More demanding than other palms!
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect (4-6 hrs) to some direct. More light
+                            than other palms.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            HIGH humidity! Mist weekly. Prone to spider mites if
+                            dry. Most finicky palm.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty demanding">DEMANDING</span>
+            </div>
+
+            <!-- Parlor Palm -->
+            <div class="plant-card water-medium">
+                <img
+                    class="plant-image"
+                    src="https://eit-planttoolbox-prod.s3.amazonaws.com/media/images/20250724_111430_Cham_6ELfDQ4It62b.jpeg"
+                    alt="Parlor Palm"
+                />
+                <div class="plant-name">🎩 Parlor Palm (6")</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            When top 1-2" dry. Don't overwater - prone to root
+                            rot. Once weekly approx.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Low to bright indirect. GREAT for low light!
+                            North/east window perfect.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Victorian favorite! Very forgiving. Pet-safe. Can
+                            live 10-40+ years.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+
+            <!-- Roebellini Palm -->
+            <div class="plant-card water-medium">
+                <img
+                    class="plant-image"
+                    src="https://eit-planttoolbox-prod.s3.amazonaws.com/media/images/Phoenix_roebelenii_4_axHKpMqIUyUa.jpeg"
+                    alt="Pygmy Date Palm"
+                />
+                <div class="plant-name">
+                    🌴 Roebellini/Pygmy Date Palm (10")
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            When top 1-2" dry. Likes consistently moist but not
+                            soggy. Weekly approx.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Bright indirect to some direct. South/west window.
+                            Needs good light!
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            Rotate weekly for even growth. Mist occasionally.
+                            Pet-safe. Sharp spines!
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty moderate">MODERATE</span>
+            </div>
+
+            <!-- Cast Iron Plant x3 -->
+            <div class="plant-card water-low">
+                <img
+                    class="plant-image"
+                    src="https://www.monrovia.com/media/catalog/product/cache/271203e8481584346d45cc4148ff17ae/3/4/345_aspidistra_elatior_5816mnc.webp"
+                    alt="Cast Iron Plant"
+                />
+                <div class="plant-name">🛡️ Cast Iron Plant x3 (1 gal each)</div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💧 Water</div>
+                        <div class="care-value">
+                            Every 1-2 weeks. Let top 50-75% dry. VERY drought
+                            tolerant. Less is more!
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">☀️ Light</div>
+                        <div class="care-value">
+                            Low to medium indirect. EXCELLENT for dark corners!
+                            No direct sun.
+                        </div>
+                    </div>
+                </div>
+                <div class="care-row">
+                    <div class="care-info">
+                        <div class="care-label">💡 Notes</div>
+                        <div class="care-value">
+                            "Nearly indestructible!" Tolerates neglect, low
+                            light, temp swings. Pet-safe.
+                        </div>
+                    </div>
+                </div>
+                <span class="difficulty easy">EASY</span>
+            </div>
+        </div>
+
+        <div
+            style="
+                max-width: 1200px;
+                margin: 20px auto;
+                padding: 15px;
+                background: #e8f5e9;
+                border-radius: 10px;
+                font-size: 13px;
+            "
+        >
+            <h3 style="color: #2d5a27; margin-bottom: 10px">
+                📋 Quick Reference - Watering Priority
+            </h3>
+            <p>
+                <strong>Check DAILY:</strong> Macho Fern, Majesty Palm (these
+                HATE drying out)
+            </p>
+            <p>
+                <strong>Check every 3-4 days:</strong> Cat Palm, Fern Accent,
+                Roebellini
+            </p>
+            <p>
+                <strong>Check weekly:</strong> Spider Plant, Money Trees, Bamboo
+                Palm, Parlor Palm
+            </p>
+            <p>
+                <strong>Check every 2-3 weeks:</strong> Ponytail Palm, Cast Iron
+                Plants (drought tolerant)
+            </p>
+
+            <h3 style="color: #2d5a27; margin: 15px 0 10px">
+                💡 Grow Light Tips
+            </h3>
+            <p>
+                Most of these plants will do well under grow lights. Place
+                demanding plants (Majesty Palm, Macho Fern) closest to the light
+                source. The Cast Iron Plants and Parlor Palm can be furthest
+                away - they're low-light champs.
+            </p>
+        </div>
+    </body>
+</html>

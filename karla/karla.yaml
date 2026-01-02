@@ -1,6 +1,6 @@
 # Karla Configuration
 
-# Letta server connection
+# Crow server connection
 server:
   base_url: http://localhost:8283
   timeout: 1800 # 10 minutes for local LLMs

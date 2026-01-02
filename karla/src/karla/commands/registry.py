@@ -7,7 +7,7 @@ from typing import Callable
 
 class CommandType(Enum):
     """Type of command."""
-    API = "api"      # Calls Letta API directly
+    API = "api"      # Calls Crow API directly
     PROMPT = "prompt"  # Sends prompt to agent
     CLI = "cli"       # Local CLI action
 

@@ -200,20 +200,43 @@ def get_llm_calls(trace_id: str):
     try:
         observations = langfuse.api.observations.get_many(trace_id=trace_id, limit=100)
 
-        # Find convert_response observations - they have both request and response
+        # Find LLM observations - either convert_response (non-streaming) or stream_async (streaming)
         llm_obs = [
             obs for obs in observations.data
-            if getattr(obs, 'name', '') == 'OpenAIClient.convert_response_to_chat_completion'
+            if getattr(obs, 'name', '') in [
+                'OpenAIClient.convert_response_to_chat_completion',
+                'OpenAIClient.stream_async'
+            ]
         ]
+
+        # For streaming, find the response in MessageManager.create_many_messages_async
+        msg_obs = [
+            obs for obs in observations.data
+            if getattr(obs, 'name', '') == 'MessageManager.create_many_messages_async'
+        ]
+
+        # Extract assistant responses from message observations
+        assistant_responses = []
+        for obs in msg_obs:
+            metadata = getattr(obs, 'metadata', {}) or {}
+            attrs = metadata.get('attributes', {})
+            pydantic_msgs = attrs.get('parameter.pydantic_msgs', '')
+            # Look for assistant messages with text content
+            import re
+            matches = re.findall(r"role=<MessageRole\.assistant[^)]+content=\[TextContent\([^)]*text='([^']*)'", pydantic_msgs)
+            assistant_responses.extend(matches)
 
         results = []
         for obs in llm_obs:
             metadata = getattr(obs, 'metadata', {}) or {}
             attrs = metadata.get('attributes', {})
 
+            is_streaming = 'stream_async' in getattr(obs, 'name', '')
             call_data = {
                 "obs_id": obs.id,
                 "trace_id": trace_id,
+                "name": getattr(obs, 'name', ''),
+                "streaming": is_streaming,
             }
 
             # Parse each attribute
@@ -225,13 +248,18 @@ def get_llm_calls(trace_id: str):
                 except:
                     call_data[clean_key] = value
 
+            # For streaming, add the extracted response
+            if is_streaming and assistant_responses:
+                call_data["response_text"] = assistant_responses
+
             results.append(call_data)
 
         print(json.dumps(results, indent=2, default=str))
         return results
 
     except Exception as e:
-        print(json.dumps({"error": str(e)}, indent=2))
+        import traceback
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}, indent=2))
         return []
 
 

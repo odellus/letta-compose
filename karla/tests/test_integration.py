@@ -1,14 +1,14 @@
-"""Integration tests for karla with a real Letta server.
+"""Integration tests for karla with a real Crow server.
 
-These tests require a running Letta server at localhost:8283.
+These tests require a running Crow server at localhost:8283.
 Skip with: pytest tests/test_integration.py -k "not integration"
 Or run only integration: pytest tests/test_integration.py -m integration
 
 Environment variables can override defaults:
-- LETTA_URL: Letta server URL (default: http://localhost:8283)
-- LETTA_MODEL: Model path or name for LLM
-- LETTA_MODEL_ENDPOINT: LLM endpoint URL
-- LETTA_EMBEDDING: Embedding model
+- CROW_URL: Crow server URL (default: http://localhost:8283)
+- CROW_MODEL: Model path or name for LLM
+- CROW_MODEL_ENDPOINT: LLM endpoint URL
+- CROW_EMBEDDING: Embedding model
 """
 
 import os
@@ -24,19 +24,19 @@ DEFAULT_MODEL = (
 DEFAULT_MODEL_ENDPOINT = "http://coast-after-3:1234/v1"
 DEFAULT_EMBEDDING = "ollama/mxbai-embed-large:latest"
 
-# Check if Letta server is available
-LETTA_URL = os.environ.get("LETTA_URL", "http://localhost:8283")
-LETTA_MODEL = os.environ.get("LETTA_MODEL", DEFAULT_MODEL)
-LETTA_MODEL_ENDPOINT = os.environ.get("LETTA_MODEL_ENDPOINT", DEFAULT_MODEL_ENDPOINT)
-LETTA_EMBEDDING = os.environ.get("LETTA_EMBEDDING", DEFAULT_EMBEDDING)
+# Check if Crow server is available
+CROW_URL = os.environ.get("CROW_URL", "http://localhost:8283")
+CROW_MODEL = os.environ.get("CROW_MODEL", DEFAULT_MODEL)
+CROW_MODEL_ENDPOINT = os.environ.get("CROW_MODEL_ENDPOINT", DEFAULT_MODEL_ENDPOINT)
+CROW_EMBEDDING = os.environ.get("CROW_EMBEDDING", DEFAULT_EMBEDDING)
 
 
-def letta_server_available():
-    """Check if Letta server is running."""
+def crow_server_available():
+    """Check if Crow server is running."""
     try:
         import httpx
 
-        response = httpx.get(f"{LETTA_URL}/v1/health/", timeout=5)
+        response = httpx.get(f"{CROW_URL}/v1/health/", timeout=5)
         return response.status_code == 200
     except Exception:
         return False
@@ -45,8 +45,8 @@ def letta_server_available():
 def get_llm_config():
     """Get LLM config."""
     return {
-        "model": LETTA_MODEL,
-        "model_endpoint": LETTA_MODEL_ENDPOINT,
+        "model": CROW_MODEL,
+        "model_endpoint": CROW_MODEL_ENDPOINT,
         "model_endpoint_type": "openai",
         "context_window": 119000,
     }
@@ -56,17 +56,17 @@ def get_llm_config():
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
-        not letta_server_available(), reason=f"Letta server not available at {LETTA_URL}"
+        not crow_server_available(), reason=f"Crow server not available at {CROW_URL}"
     ),
 ]
 
 
 @pytest.fixture
-def letta_client():
-    """Create a Letta client with no timeout for local LLMs."""
-    from letta_client import Letta
+def crow_client():
+    """Create a Crow client with no timeout for local LLMs."""
+    from crow_client import Crow
 
-    return Letta(base_url=LETTA_URL, timeout=None)
+    return Crow(base_url=CROW_URL, timeout=None)
 
 
 @pytest.fixture
@@ -76,35 +76,35 @@ def llm_config():
 
 
 @pytest.fixture
-def test_agent(letta_client, llm_config):
+def test_agent(crow_client, llm_config):
     """Create a test agent and clean up after."""
-    agent = letta_client.agents.create(
+    agent = crow_client.agents.create(
         name="karla-test-agent",
         system="You are a test agent. Respond briefly.",
         llm_config=llm_config,
-        embedding=LETTA_EMBEDDING,
+        embedding=CROW_EMBEDDING,
         include_base_tools=True,
         kv_cache_friendly=True,
     )
     yield agent
     # Cleanup
     try:
-        letta_client.agents.delete(agent.id)
+        crow_client.agents.delete(agent.id)
     except Exception:
         pass
 
 
-class TestLettaConnection:
-    """Test basic Letta server connectivity."""
+class TestCrowConnection:
+    """Test basic Crow server connectivity."""
 
-    def test_health_check(self, letta_client):
-        """Test that we can connect to Letta server."""
-        health = letta_client.health()
+    def test_health_check(self, crow_client):
+        """Test that we can connect to Crow server."""
+        health = crow_client.health()
         assert health is not None
 
-    def test_list_agents(self, letta_client):
+    def test_list_agents(self, crow_client):
         """Test listing agents."""
-        agents = letta_client.agents.list()
+        agents = crow_client.agents.list()
         # Should return a list (may be empty)
         assert isinstance(list(agents), list)
 
@@ -112,13 +112,13 @@ class TestLettaConnection:
 class TestAgentCreation:
     """Test creating agents with karla-compatible settings."""
 
-    def test_create_agent_with_kv_cache_friendly(self, letta_client, llm_config):
+    def test_create_agent_with_kv_cache_friendly(self, crow_client, llm_config):
         """Test creating an agent with kv_cache_friendly flag."""
-        agent = letta_client.agents.create(
+        agent = crow_client.agents.create(
             name="karla-kv-test",
             system="You are a test agent.",
             llm_config=llm_config,
-            embedding=LETTA_EMBEDDING,
+            embedding=CROW_EMBEDDING,
             kv_cache_friendly=True,
             include_base_tools=True,
         )
@@ -127,18 +127,18 @@ class TestAgentCreation:
             assert agent.id is not None
             assert agent.name == "karla-kv-test"
             # Verify kv_cache_friendly was set
-            retrieved = letta_client.agents.retrieve(agent.id)
+            retrieved = crow_client.agents.retrieve(agent.id)
             assert retrieved.kv_cache_friendly is True
         finally:
-            letta_client.agents.delete(agent.id)
+            crow_client.agents.delete(agent.id)
 
-    def test_create_agent_with_memory_blocks(self, letta_client, llm_config):
+    def test_create_agent_with_memory_blocks(self, crow_client, llm_config):
         """Test creating an agent with custom memory blocks."""
-        agent = letta_client.agents.create(
+        agent = crow_client.agents.create(
             name="karla-memory-test",
             system="You are a test agent with memory.",
             llm_config=llm_config,
-            embedding=LETTA_EMBEDDING,
+            embedding=CROW_EMBEDDING,
             kv_cache_friendly=True,
             memory_blocks=[
                 {"label": "persona", "value": "I am a helpful assistant."},
@@ -149,26 +149,26 @@ class TestAgentCreation:
         try:
             assert agent.id is not None
             # Verify memory blocks
-            blocks = list(letta_client.agents.blocks.list(agent.id))
+            blocks = list(crow_client.agents.blocks.list(agent.id))
             labels = [b.label for b in blocks]
             assert "persona" in labels
             assert "human" in labels
         finally:
-            letta_client.agents.delete(agent.id)
+            crow_client.agents.delete(agent.id)
 
 
 class TestMemoryTools:
     """Test memory-related tools work with kv_cache_friendly."""
 
-    def test_memory_read_tool_available(self, letta_client, test_agent):
+    def test_memory_read_tool_available(self, crow_client, test_agent):
         """Test that memory_read tool is available."""
-        tools = list(letta_client.agents.tools.list(test_agent.id))
+        tools = list(crow_client.agents.tools.list(test_agent.id))
         tool_names = [t.name for t in tools]
         assert "memory_read" in tool_names
 
-    def test_memory_tools_available(self, letta_client, test_agent):
+    def test_memory_tools_available(self, crow_client, test_agent):
         """Test that memory tools are available."""
-        tools = list(letta_client.agents.tools.list(test_agent.id))
+        tools = list(crow_client.agents.tools.list(test_agent.id))
         tool_names = [t.name for t in tools]
         # kv-cache-friendly branch uses memory_insert/memory_replace
         assert "memory_insert" in tool_names
@@ -176,15 +176,15 @@ class TestMemoryTools:
 
 
 class TestKarlaConfig:
-    """Test karla config with real Letta client."""
+    """Test karla config with real Crow client."""
 
     def test_create_client_from_config(self):
-        """Test creating a Letta client from karla config."""
+        """Test creating a Crow client from karla config."""
         from karla.config import KarlaConfig, create_client
 
         config = KarlaConfig.from_dict(
             {
-                "server": {"base_url": LETTA_URL, "timeout": None},
+                "server": {"base_url": CROW_URL, "timeout": None},
                 "llm": {"model": "test", "model_endpoint": "http://localhost:1234/v1"},
                 "embedding": {"model": "test-embed"},
             }
@@ -201,7 +201,7 @@ class TestKarlaConfig:
 
         config = KarlaConfig.from_dict(
             {
-                "server": {"base_url": LETTA_URL},  # timeout not specified = None
+                "server": {"base_url": CROW_URL},  # timeout not specified = None
                 "llm": {"model": "test", "model_endpoint": "http://localhost:1234/v1"},
                 "embedding": {"model": "test-embed"},
             }
@@ -216,14 +216,14 @@ class TestKarlaConfig:
 
 
 class TestAgentContext:
-    """Test karla AgentContext with real Letta."""
+    """Test karla AgentContext with real Crow."""
 
-    def test_context_setup(self, letta_client, test_agent):
+    def test_context_setup(self, crow_client, test_agent):
         """Test setting up agent context."""
         from karla import AgentContext, clear_context, get_context, set_context
 
         ctx = AgentContext(
-            client=letta_client,
+            client=crow_client,
             agent_id=test_agent.id,
             working_dir="/tmp",
             kv_cache_friendly=True,
@@ -242,7 +242,7 @@ class TestAgentContext:
 class TestHeadlessMode:
     """Test CLI headless mode functionality."""
 
-    def test_headless_creates_agent(self, letta_client, llm_config):
+    def test_headless_creates_agent(self, crow_client, llm_config):
         """Test headless mode creates agent and runs loop."""
         import asyncio
         import tempfile
@@ -252,9 +252,9 @@ class TestHeadlessMode:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = KarlaConfig.from_dict({
-                "server": {"base_url": LETTA_URL, "timeout": None},
+                "server": {"base_url": CROW_URL, "timeout": None},
                 "llm": llm_config,
-                "embedding": {"model": LETTA_EMBEDDING},
+                "embedding": {"model": CROW_EMBEDDING},
             })
 
             # Run headless with a simple prompt
@@ -270,7 +270,7 @@ class TestHeadlessMode:
             try:
                 # Verify agent was created
                 assert agent_id is not None
-                agent = letta_client.agents.retrieve(agent_id)
+                agent = crow_client.agents.retrieve(agent_id)
                 assert agent.name.startswith("karla-")
 
                 # Verify response was received
@@ -279,11 +279,11 @@ class TestHeadlessMode:
             finally:
                 # Cleanup
                 try:
-                    letta_client.agents.delete(agent_id)
+                    crow_client.agents.delete(agent_id)
                 except Exception:
                     pass
 
-    def test_headless_output_formats(self, letta_client, llm_config):
+    def test_headless_output_formats(self, crow_client, llm_config):
         """Test headless mode output format options."""
         import asyncio
         import tempfile
@@ -294,9 +294,9 @@ class TestHeadlessMode:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = KarlaConfig.from_dict({
-                "server": {"base_url": LETTA_URL, "timeout": None},
+                "server": {"base_url": CROW_URL, "timeout": None},
                 "llm": llm_config,
-                "embedding": {"model": LETTA_EMBEDDING},
+                "embedding": {"model": CROW_EMBEDDING},
             })
 
             response, agent_id = asyncio.get_event_loop().run_until_complete(
@@ -322,7 +322,7 @@ class TestHeadlessMode:
                 assert "iterations" in parsed
             finally:
                 try:
-                    letta_client.agents.delete(agent_id)
+                    crow_client.agents.delete(agent_id)
                 except Exception:
                     pass
 
@@ -330,7 +330,7 @@ class TestHeadlessMode:
 class TestAgentSessionContinuity:
     """Test agent session continuity (E2E test)."""
 
-    def test_continue_last_agent(self, letta_client, llm_config):
+    def test_continue_last_agent(self, crow_client, llm_config):
         """Test continuing with last agent maintains session."""
         import asyncio
         import tempfile
@@ -341,9 +341,9 @@ class TestAgentSessionContinuity:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = KarlaConfig.from_dict({
-                "server": {"base_url": LETTA_URL, "timeout": None},
+                "server": {"base_url": CROW_URL, "timeout": None},
                 "llm": llm_config,
-                "embedding": {"model": LETTA_EMBEDDING},
+                "embedding": {"model": CROW_EMBEDDING},
             })
 
             # First run - create new agent
@@ -378,11 +378,11 @@ class TestAgentSessionContinuity:
             finally:
                 # Cleanup
                 try:
-                    letta_client.agents.delete(agent_id1)
+                    crow_client.agents.delete(agent_id1)
                 except Exception:
                     pass
 
-    def test_force_new_creates_different_agent(self, letta_client, llm_config):
+    def test_force_new_creates_different_agent(self, crow_client, llm_config):
         """Test force_new creates a new agent instead of continuing."""
         import asyncio
         import tempfile
@@ -392,9 +392,9 @@ class TestAgentSessionContinuity:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = KarlaConfig.from_dict({
-                "server": {"base_url": LETTA_URL, "timeout": None},
+                "server": {"base_url": CROW_URL, "timeout": None},
                 "llm": llm_config,
-                "embedding": {"model": LETTA_EMBEDDING},
+                "embedding": {"model": CROW_EMBEDDING},
             })
 
             # First run
@@ -423,16 +423,16 @@ class TestAgentSessionContinuity:
                     assert agent_id2 != agent_id1
                 finally:
                     try:
-                        letta_client.agents.delete(agent_id2)
+                        crow_client.agents.delete(agent_id2)
                     except Exception:
                         pass
             finally:
                 try:
-                    letta_client.agents.delete(agent_id1)
+                    crow_client.agents.delete(agent_id1)
                 except Exception:
                     pass
 
-    def test_explicit_agent_id(self, letta_client, test_agent, llm_config):
+    def test_explicit_agent_id(self, crow_client, test_agent, llm_config):
         """Test using explicit agent ID."""
         import asyncio
         import tempfile
@@ -442,9 +442,9 @@ class TestAgentSessionContinuity:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config = KarlaConfig.from_dict({
-                "server": {"base_url": LETTA_URL, "timeout": None},
+                "server": {"base_url": CROW_URL, "timeout": None},
                 "llm": llm_config,
-                "embedding": {"model": LETTA_EMBEDDING},
+                "embedding": {"model": CROW_EMBEDDING},
             })
 
             # Run with explicit agent ID

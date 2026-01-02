@@ -215,7 +215,7 @@ First, check your `loaded_skills` memory block. If the `initializing-memory` ski
 
 from dataclasses import dataclass, field
 from typing import Optional
-from letta_client import Letta
+from crow_client import Letta
 
 @dataclass
 class CommandContext:

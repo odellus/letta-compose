@@ -15,7 +15,7 @@ from karla.context import (
 
 @pytest.fixture
 def mock_client():
-    """Create a mock Letta client."""
+    """Create a mock Crow client."""
     return MagicMock()
 
 

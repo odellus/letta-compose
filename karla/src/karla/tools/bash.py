@@ -53,7 +53,7 @@ Only create commits when requested by the user. When creating commits:
 3. Run git add for relevant files
 4. Create the commit with message ending with:
    🤖 Generated with Karla
-   Co-Authored-By: Karla <noreply@letta.com>
+   Co-Authored-By: Karla <noreply@crow.com>
 
 IMPORTANT commit format - use HEREDOC for proper formatting:
 ```
@@ -62,7 +62,7 @@ Commit message here.
 
 🤖 Generated with Karla
 
-Co-Authored-By: Karla <noreply@letta.com>
+Co-Authored-By: Karla <noreply@crow.com>
 EOF
 )"
 ```

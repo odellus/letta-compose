@@ -1,7 +1,7 @@
 """Main agent loop for Karla with client-side tool execution.
 
 This module implements the core message loop that:
-1. Sends messages to the Letta agent
+1. Sends messages to the Crow agent
 2. Receives responses (including tool calls)
 3. Executes tools client-side
 4. Sends results back via the approval flow
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Optional, Union
 
-from letta_client import Letta
+from crow_client import Crow
 
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager, run_hooks
@@ -58,7 +58,7 @@ class AgentResponse:
 
 
 def parse_message_response(response) -> tuple[Optional[str], list[PendingToolCall]]:
-    """Parse a Letta message response for text and tool calls.
+    """Parse a Crow message response for text and tool calls.
 
     Args:
         response: Response from client.agents.messages.create()
@@ -107,16 +107,16 @@ def parse_message_response(response) -> tuple[Optional[str], list[PendingToolCal
 
 
 def send_approval(
-    client: Letta,
+    client: Crow,
     agent_id: str,
     tool_call_id: str,
     result: str,
     status: str = "success",
 ):
-    """Send tool execution result back to Letta via approval flow.
+    """Send tool execution result back to Crow via approval flow.
 
     Args:
-        client: Letta client
+        client: Crow client
         agent_id: Agent ID
         tool_call_id: ID of the tool call being responded to
         result: Tool execution output
@@ -146,6 +146,9 @@ DEFAULT_RETRY_DELAY = 1.0  # seconds
 ToolStartCallback = Callable[[str, dict], Union[None, Awaitable[None]]]
 ToolEndCallback = Callable[[str, str, bool], Union[None, Awaitable[None]]]
 TextCallback = Callable[[str], Union[None, Awaitable[None]]]
+ReasoningCallback = Callable[[str], Union[None, Awaitable[None]]]  # For agent's internal thinking
+# For internal/server-side tools (memory operations) - (name, args)
+InternalToolCallback = Callable[[str, dict], Union[None, Awaitable[None]]]
 
 
 async def _maybe_await(result: Union[None, Awaitable[None]]) -> None:
@@ -155,20 +158,24 @@ async def _maybe_await(result: Union[None, Awaitable[None]]) -> None:
 
 
 async def _stream_message(
-    client: Letta,
+    client: Crow,
     agent_id: str,
     messages: list,
     on_text: Optional[TextCallback] = None,
     on_tool_start: Optional[ToolStartCallback] = None,
+    on_reasoning: Optional[ReasoningCallback] = None,
+    on_internal_tool: Optional[InternalToolCallback] = None,
 ) -> tuple[Optional[str], list[PendingToolCall]]:
     """Stream a message and return accumulated text and any pending tool calls.
 
     Args:
-        client: Letta client
+        client: Crow client
         agent_id: Agent ID
         messages: Messages to send
         on_text: Callback for text chunks (called for each token)
         on_tool_start: Callback when tool call detected (name, partial args)
+        on_reasoning: Callback for reasoning/thinking chunks (agent's internal monologue)
+        on_internal_tool: Callback for internal/server-side tool calls (memory operations)
 
     Returns:
         Tuple of (accumulated_text, pending_tool_calls)
@@ -189,14 +196,35 @@ async def _stream_message(
     for chunk in stream:
         chunk_type = type(chunk).__name__
 
-        # Handle text tokens
-        if chunk_type == "AssistantMessage" and hasattr(chunk, "content") and chunk.content:
+        # Handle reasoning/thinking tokens (agent's internal monologue)
+        if chunk_type == "ReasoningMessage" and hasattr(chunk, "reasoning") and chunk.reasoning:
+            reasoning_token = str(chunk.reasoning)
+            if on_reasoning:
+                await _maybe_await(on_reasoning(reasoning_token))
+
+        # Handle text tokens (assistant's response to user)
+        elif chunk_type == "AssistantMessage" and hasattr(chunk, "content") and chunk.content:
             token = str(chunk.content)
             accumulated_text += token
             if on_text:
                 await _maybe_await(on_text(token))
 
-        # Handle tool call deltas - accumulate them
+        # Handle internal/server-side tool calls (memory operations)
+        # These are executed by Crow server, not client-side
+        elif chunk_type == "ToolCallMessage" and hasattr(chunk, "tool_call"):
+            tc = chunk.tool_call
+            tc_name = getattr(tc, "name", None)
+            tc_args_str = getattr(tc, "arguments", None)
+
+            if tc_name and on_internal_tool:
+                # Parse arguments if present
+                try:
+                    args = json.loads(tc_args_str) if tc_args_str else {}
+                except json.JSONDecodeError:
+                    args = {"raw": tc_args_str} if tc_args_str else {}
+                await _maybe_await(on_internal_tool(tc_name, args))
+
+        # Handle tool call deltas - accumulate them (client-side tools needing approval)
         elif chunk_type == "ApprovalRequestMessage" and hasattr(chunk, "tool_call"):
             tc = chunk.tool_call
             tc_id = getattr(tc, "tool_call_id", "") or ""
@@ -220,7 +248,7 @@ async def _stream_message(
                 tool_calls_in_progress[tc_id]["arguments"] += tc_args
 
         # Stop/usage messages are just logged
-        elif chunk_type in ("LettaStopReason", "LettaUsageStatistics"):
+        elif chunk_type in ("CrowStopReason", "CrowUsageStatistics"):
             logger.debug("Stream end: %s", chunk_type)
 
     # Convert accumulated tool calls to PendingToolCall objects
@@ -242,22 +270,26 @@ async def _stream_message(
 
 
 async def _send_approval(
-    client: Letta,
+    client: Crow,
     agent_id: str,
     tool_call_id: str,
     result: str,
     is_error: bool,
     on_text: Optional[TextCallback] = None,
+    on_reasoning: Optional[ReasoningCallback] = None,
+    on_internal_tool: Optional[InternalToolCallback] = None,
 ) -> tuple[Optional[str], list[PendingToolCall]]:
     """Send tool result and stream the response.
 
     Args:
-        client: Letta client
+        client: Crow client
         agent_id: Agent ID
         tool_call_id: ID of the tool call being responded to
         result: Tool execution output
         is_error: Whether the tool execution failed
+        on_reasoning: Callback for reasoning/thinking chunks
         on_text: Callback for text chunks
+        on_internal_tool: Callback for internal/server-side tool calls
 
     Returns:
         Tuple of (text_response, pending_tool_calls)
@@ -275,11 +307,13 @@ async def _send_approval(
             }]
         }],
         on_text=on_text,
+        on_reasoning=on_reasoning,
+        on_internal_tool=on_internal_tool,
     )
 
 
 async def run_agent_loop(
-    client: Letta,
+    client: Crow,
     agent_id: str,
     executor: ToolExecutor,
     message: str,
@@ -288,6 +322,8 @@ async def run_agent_loop(
     on_tool_start: Optional[ToolStartCallback] = None,
     on_tool_end: Optional[ToolEndCallback] = None,
     on_text: Optional[TextCallback] = None,
+    on_reasoning: Optional[ReasoningCallback] = None,
+    on_internal_tool: Optional[InternalToolCallback] = None,
     hooks_manager: Optional[HooksManager] = None,
 ) -> AgentResponse:
     """Run the main agent loop with client-side tool execution.
@@ -302,7 +338,7 @@ async def run_agent_loop(
     Includes retry logic for transient API errors.
 
     Args:
-        client: Letta client
+        client: Crow client
         agent_id: Agent ID
         executor: Tool executor for client-side execution
         message: Initial user message
@@ -311,6 +347,8 @@ async def run_agent_loop(
         on_tool_start: Callback when tool execution starts
         on_tool_end: Callback when tool execution ends
         on_text: Callback when text response received
+        on_reasoning: Callback for reasoning/thinking chunks (agent's internal monologue)
+        on_internal_tool: Callback for internal/server-side tool calls (memory operations)
         hooks_manager: Optional hooks manager for event callbacks
 
     Returns:
@@ -353,6 +391,8 @@ async def run_agent_loop(
         client, agent_id,
         [{"role": "user", "content": message}],
         on_text=on_text,
+        on_reasoning=on_reasoning,
+        on_internal_tool=on_internal_tool,
     )
     if text:
         final_text = text
@@ -437,6 +477,8 @@ async def run_agent_loop(
                 result.output,
                 result.is_error,
                 on_text=on_text,
+                on_reasoning=on_reasoning,
+                on_internal_tool=on_internal_tool,
             )
             if text:
                 final_text = text

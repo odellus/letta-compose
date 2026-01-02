@@ -1,6 +1,6 @@
 """ACP (Agent Communication Protocol) server wrapper for Karla.
 
-This wraps the Karla/Letta agent as an ACP-compliant server that can be
+This wraps the Karla/Crow agent as an ACP-compliant server that can be
 consumed by ACP clients.
 """
 
@@ -30,10 +30,12 @@ from acp import (
     update_agent_thought,
     update_tool_call,
 )
+from acp.helpers import update_available_commands
 from acp.interfaces import Client
 from acp.schema import (
     AgentCapabilities,
     AudioContentBlock,
+    AvailableCommand,
     ClientCapabilities,
     EmbeddedResourceContentBlock,
     HttpMcpServer,
@@ -48,12 +50,17 @@ from acp.schema import (
 
 from karla.agent import create_karla_agent, get_or_create_agent
 from karla.agent_loop import run_agent_loop
-from karla.commands.context import CommandContext
-from karla.commands.dispatcher import dispatch_command
+from karla.commands import (  # Import from main module to register commands
+    COMMANDS,
+    CommandContext,
+    dispatch_command,
+)
 from karla.config import KarlaConfig, create_client, load_config
-from karla.context import AgentContext, set_context, clear_context
+from karla.context import AgentContext, clear_context, set_context
+from karla.crow import register_tools_with_crow
 from karla.executor import ToolExecutor
-from karla.letta import register_tools_with_letta
+from karla.hooks import HooksManager
+from karla.hotl.loop import create_hotl_hooks
 from karla.memory import update_project_block
 from karla.settings import SettingsManager
 from karla.tools import create_default_registry
@@ -106,12 +113,14 @@ def get_tool_info(name: str, args: dict[str, Any]) -> dict[str, Any]:
         if path:
             locations = [{"path": path}]
             # Diff showing new file creation
-            content = [{
-                "type": "diff",
-                "path": path,
-                "oldText": None,
-                "newText": args.get("content", ""),
-            }]
+            content = [
+                {
+                    "type": "diff",
+                    "path": path,
+                    "oldText": None,
+                    "newText": args.get("content", ""),
+                }
+            ]
 
     elif name == "Edit":
         path = args.get("file_path", "")
@@ -121,18 +130,22 @@ def get_tool_info(name: str, args: dict[str, Any]) -> dict[str, Any]:
             # Show the diff (old_string -> new_string)
             old_str = args.get("old_string", "")
             new_str = args.get("new_string", "")
-            content = [{
-                "type": "diff",
-                "path": path,
-                "oldText": old_str,
-                "newText": new_str,
-            }]
+            content = [
+                {
+                    "type": "diff",
+                    "path": path,
+                    "oldText": old_str,
+                    "newText": new_str,
+                }
+            ]
 
     elif name == "Bash":
         cmd = args.get("command", "")
         title = f"`{cmd}`" if cmd else "Terminal"
         if args.get("description"):
-            content = [{"type": "content", "content": {"type": "text", "text": args["description"]}}]
+            content = [
+                {"type": "content", "content": {"type": "text", "text": args["description"]}}
+            ]
 
     elif name == "BashOutput":
         title = "Tail Logs"
@@ -272,19 +285,72 @@ class KarlaAgent(Agent):
         mcp_servers: list[HttpMcpServer | SseMcpServer | McpServerStdio],
         **kwargs: Any,
     ) -> NewSessionResponse:
-        """Create a new session (creates a new Letta agent)."""
+        """Create a new session (creates a new Crow agent).
+
+        Checks for pinned agents first - if one exists for this directory,
+        it will be loaded instead of creating a new agent.
+        """
         session_id = uuid4().hex
         client = create_client(self._config)
 
-        # Create new Karla agent (includes tool registration)
-        karla_agent = create_karla_agent(
-            client=client,
-            config=self._config,
-            working_dir=cwd,
-        )
+        # Check for existing agent (pinned or last used)
+        settings = SettingsManager(cwd)
+        karla_agent = None
+
+        # Try pinned agents first
+        for agent_id in settings.get_pinned_agents():
+            try:
+                karla_agent = get_or_create_agent(
+                    client=client,
+                    config=self._config,
+                    working_dir=cwd,
+                    agent_id=agent_id,
+                    create_if_missing=False,
+                )
+                if karla_agent:
+                    logger.info("Using pinned agent: %s", agent_id)
+                    break
+            except Exception as e:
+                logger.warning("Failed to load pinned agent %s: %s", agent_id, e)
+
+        # Try last used agent if no pinned agent found
+        if karla_agent is None:
+            last_agent_id = settings.get_last_agent()
+            if last_agent_id:
+                try:
+                    karla_agent = get_or_create_agent(
+                        client=client,
+                        config=self._config,
+                        working_dir=cwd,
+                        agent_id=last_agent_id,
+                        create_if_missing=False,
+                    )
+                    if karla_agent:
+                        logger.info("Using last agent: %s", last_agent_id)
+                except Exception as e:
+                    logger.warning("Failed to load last agent %s: %s", last_agent_id, e)
+
+        # Create new agent only if no existing agent found
+        if karla_agent is None:
+            karla_agent = create_karla_agent(
+                client=client,
+                config=self._config,
+                working_dir=cwd,
+            )
+            logger.info("Created new agent: %s", karla_agent.agent_id)
+
+        # Save as last used agent for next session
+        settings.save_last_agent(karla_agent.agent_id)
 
         # Update project memory block with environment context
         update_project_block(client, karla_agent.agent_id, cwd)
+
+        # Create hooks manager with HOTL hooks
+        hooks_manager = HooksManager()
+        hotl_hooks = create_hotl_hooks(cwd)
+        for event, callbacks in hotl_hooks.items():
+            for callback in callbacks:
+                hooks_manager.add_hook(event, callback)
 
         # Store session state
         self._sessions[session_id] = {
@@ -292,10 +358,33 @@ class KarlaAgent(Agent):
             "cwd": cwd,
             "client": client,
             "executor": karla_agent.executor,
+            "hooks_manager": hooks_manager,
         }
 
-        logger.info("Created new session %s with Letta agent %s", session_id, karla_agent.agent_id)
+        logger.info("Created new session %s with Crow agent %s", session_id, karla_agent.agent_id)
+
+        # Send available commands to client (async, after returning session)
+        asyncio.create_task(self._send_available_commands(session_id))
+
         return NewSessionResponse(session_id=session_id, modes=None)
+
+    async def _send_available_commands(self, session_id: str) -> None:
+        """Send available commands to the ACP client."""
+        commands = [
+            AvailableCommand(
+                name=cmd.name.lstrip("/"),  # ACP client adds the / prefix
+                description=cmd.description,
+                input=None,  # No argument hint for now
+            )
+            for cmd in COMMANDS.values()
+            if not cmd.hidden
+        ]
+
+        await self._conn.session_update(
+            session_id=session_id,
+            update=update_available_commands(commands),
+        )
+        logger.info("Sent %d available commands to client", len(commands))
 
     async def load_session(
         self,
@@ -304,7 +393,7 @@ class KarlaAgent(Agent):
         session_id: str,
         **kwargs: Any,
     ) -> LoadSessionResponse | None:
-        """Load an existing session (session_id is the Letta agent_id)."""
+        """Load an existing session (session_id is the Crow agent_id)."""
         client = create_client(self._config)
 
         # Get existing agent
@@ -320,14 +409,29 @@ class KarlaAgent(Agent):
             logger.warning("Agent %s not found", session_id)
             return None
 
+        # Update project memory block with current environment context
+        update_project_block(client, karla_agent.agent_id, cwd)
+
+        # Create hooks manager with HOTL hooks
+        hooks_manager = HooksManager()
+        hotl_hooks = create_hotl_hooks(cwd)
+        for event, callbacks in hotl_hooks.items():
+            for callback in callbacks:
+                hooks_manager.add_hook(event, callback)
+
         self._sessions[session_id] = {
             "agent_id": karla_agent.agent_id,
             "cwd": cwd,
             "client": client,
             "executor": karla_agent.executor,
+            "hooks_manager": hooks_manager,
         }
 
-        logger.info("Loaded session %s with Letta agent %s", session_id, karla_agent.agent_id)
+        logger.info("Loaded session %s with Crow agent %s", session_id, karla_agent.agent_id)
+
+        # Send available commands to client
+        asyncio.create_task(self._send_available_commands(session_id))
+
         return LoadSessionResponse()
 
     async def _handle_command(
@@ -388,7 +492,7 @@ class KarlaAgent(Agent):
     ) -> PromptResponse:
         """Handle a prompt from the user.
 
-        Runs the Letta agent loop with client-side tool execution,
+        Runs the Crow agent loop with client-side tool execution,
         streaming updates back to the ACP client.
         """
         logger.info("PROMPT received for session %s", session_id)
@@ -412,10 +516,16 @@ class KarlaAgent(Agent):
 
         # Check for slash commands
         if user_message.strip().startswith("/"):
-            result = await self._handle_command(session_id, session, user_message.strip())
-            if result is not None:
-                return result
-            # If result is None, command wants to continue to agent (e.g., injected prompt)
+            logger.info("COMMAND DETECTED: %s", user_message.strip())
+            try:
+                result = await self._handle_command(session_id, session, user_message.strip())
+                logger.info("COMMAND RESULT: %s", result)
+                if result is not None:
+                    return result
+                # If result is None, command wants to continue to agent (e.g., injected prompt)
+            except Exception as e:
+                logger.exception("COMMAND ERROR: %s", e)
+                raise
 
         # Set up context for tools
         ctx = AgentContext(
@@ -463,7 +573,9 @@ class KarlaAgent(Agent):
 
         async def on_tool_end_async(name: str, output: str, is_error: bool) -> None:
             """Stream tool call completion to ACP client."""
-            logger.info("TOOL END: %s is_error=%s output=%s", name, is_error, output[:100] if output else "")
+            logger.info(
+                "TOOL END: %s is_error=%s output=%s", name, is_error, output[:100] if output else ""
+            )
             tc_id = f"tc_{tool_call_counter[0]}"
 
             # Get result content for this tool type
@@ -488,25 +600,105 @@ class KarlaAgent(Agent):
                 update=update_agent_message(text_block(text)),
             )
 
-        try:
-            # Run the agent loop with async callbacks
-            response = await run_agent_loop(
-                client=session["client"],
-                agent_id=session["agent_id"],
-                executor=session["executor"],
-                message=user_message,
-                max_iterations=50,
-                on_tool_start=on_tool_start_async,
-                on_tool_end=on_tool_end_async,
-                on_text=on_text_async,
+        async def on_reasoning_async(reasoning: str) -> None:
+            """Stream reasoning/thinking to ACP client."""
+            logger.info("REASONING: %s", reasoning[:100] if reasoning else "")
+            await self._conn.session_update(
+                session_id=session_id,
+                update=update_agent_thought(text_block(reasoning)),
             )
 
-            # Final text response (only if on_text wasn't called)
-            if response.text and not text_streamed[0]:
-                await self._conn.session_update(
-                    session_id=session_id,
-                    update=update_agent_message(text_block(response.text)),
+        async def on_internal_tool_async(name: str, args: dict) -> None:
+            """Stream internal/server-side tool calls (memory operations) to ACP client."""
+            # Format memory tool calls as readable thoughts
+            if name == "archival_memory_insert":
+                content = args.get("content", args.get("memory", ""))
+                thought = (
+                    f"📝 Storing memory: {content[:200]}..."
+                    if len(str(content)) > 200
+                    else f"📝 Storing memory: {content}"
                 )
+            elif name == "archival_memory_search":
+                query = args.get("query", "")
+                thought = f"🔍 Searching memories: {query}"
+            elif name == "core_memory_append":
+                field = args.get("field", args.get("name", ""))
+                content = args.get("content", args.get("value", ""))
+                thought = (
+                    f"💭 Updating core memory [{field}]: {content[:100]}..."
+                    if len(str(content)) > 100
+                    else f"💭 Updating core memory [{field}]: {content}"
+                )
+            elif name == "core_memory_replace":
+                field = args.get("field", args.get("name", ""))
+                thought = f"💭 Replacing core memory [{field}]"
+            elif name == "send_message":
+                # Skip - this is already visible as assistant text
+                return
+            else:
+                # Generic internal tool
+                thought = f"🔧 {name}: {str(args)[:100]}"
+
+            logger.info("INTERNAL_TOOL: %s", thought)
+            await self._conn.session_update(
+                session_id=session_id,
+                update=update_agent_thought(text_block(thought)),
+            )
+
+        hooks_manager = session.get("hooks_manager")
+        current_message = user_message
+
+        try:
+            # HOTL loop - may run multiple iterations
+            while True:
+                # Reset text streamed flag for each iteration
+                text_streamed[0] = False
+
+                # Run the agent loop with async callbacks
+                response = await run_agent_loop(
+                    client=session["client"],
+                    agent_id=session["agent_id"],
+                    executor=session["executor"],
+                    message=current_message,
+                    max_iterations=50,
+                    on_tool_start=on_tool_start_async,
+                    on_tool_end=on_tool_end_async,
+                    on_text=on_text_async,
+                    on_reasoning=on_reasoning_async,
+                    on_internal_tool=on_internal_tool_async,
+                    hooks_manager=hooks_manager,
+                )
+
+                # Final text response (only if on_text wasn't called)
+                if response.text and not text_streamed[0]:
+                    await self._conn.session_update(
+                        session_id=session_id,
+                        update=update_agent_message(text_block(response.text)),
+                    )
+
+                # Check on_loop_end hooks (for HOTL continuation)
+                if hooks_manager:
+                    hook_results = await hooks_manager.run_hooks(
+                        "on_loop_end",
+                        {
+                            "text": response.text or "",
+                            "agent_id": session["agent_id"],
+                        },
+                    )
+                    # Check if any hook wants to continue the loop
+                    inject_message = None
+                    for hr in hook_results:
+                        if hr.inject_message:
+                            inject_message = hr.inject_message
+                            break
+
+                    if inject_message:
+                        logger.info("HOTL: Continuing loop with injected message")
+                        current_message = inject_message
+                        continue  # Loop again with new message
+
+                # No continuation - exit loop
+                break
 
         except Exception as e:
             logger.exception("Error in agent loop")
@@ -546,6 +738,7 @@ async def _async_main() -> None:
     agent = KarlaAgent(config)
 
     logger.info("Starting Karla ACP server...")
+    logger.info("Registered commands: %s", list(COMMANDS.keys()))
     await run_agent(agent)
 
 

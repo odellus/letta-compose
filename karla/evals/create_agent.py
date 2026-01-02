@@ -4,10 +4,10 @@ Creates a fresh karla agent for each test sample with all karla tools attached.
 Uses the actual karla tool registry - same tools tested in the main codebase.
 """
 
-from letta_client import AsyncLetta
-from letta_client.types import CreateBlockParam
-from letta_evals.decorators import agent_factory
-from letta_evals.models import Sample
+from crow_client import AsyncCrow
+from crow_client.types import CreateBlockParam
+from crow_evals.decorators import agent_factory
+from crow_evals.models import Sample
 
 from karla.tools import create_default_registry
 
@@ -38,12 +38,12 @@ When asked to perform a task:
 Always be precise and verify your work."""
 
 
-async def register_tools_with_letta(
-    client: AsyncLetta,
+async def register_tools_with_crow(
+    client: AsyncCrow,
     agent_id: str,
     working_dir: str,
 ) -> list[str]:
-    """Register karla tools with a Letta agent.
+    """Register karla tools with a Crow agent.
 
     Uses the actual karla tool registry with proper strict-mode schemas.
     """
@@ -53,12 +53,12 @@ async def register_tools_with_letta(
     tool_ids = []
 
     # Get source code and schemas from registry
-    sources = registry.to_letta_sources(strict=True)
+    sources = registry.to_crow_sources(strict=True)
     schemas = {tool.name: tool.definition().to_openai_schema(strict=True) for tool in registry}
 
     for name, source_code in sources.items():
         try:
-            # Build json_schema in Letta's expected format
+            # Build json_schema in Crow's expected format
             openai_schema = schemas.get(name, {})
             func_schema = openai_schema.get("function", {})
 
@@ -89,11 +89,11 @@ async def register_tools_with_letta(
 
 
 @agent_factory
-async def create_karla_agent(client: AsyncLetta, sample: Sample) -> str:
+async def create_karla_agent(client: AsyncCrow, sample: Sample) -> str:
     """Create a fresh karla agent for evaluation.
 
     Each test sample gets a brand new agent with no prior memory/history.
-    This is the letta-evals equivalent of torch.no_grad() - memories don't persist.
+    This is the crow-evals equivalent of torch.no_grad() - memories don't persist.
     """
     working_dir = "/tmp/karla-eval"
     if sample.agent_args and "working_dir" in sample.agent_args:
@@ -101,7 +101,7 @@ async def create_karla_agent(client: AsyncLetta, sample: Sample) -> str:
 
     agent = await client.agents.create(
         name=f"karla-eval-{sample.id}",
-        agent_type="letta_v1_agent",
+        agent_type="crow_v1_agent",
         system=KARLA_SYSTEM_PROMPT,
         llm_config=DEFAULT_LLM_CONFIG,
         embedding=DEFAULT_EMBEDDING,
@@ -124,6 +124,6 @@ async def create_karla_agent(client: AsyncLetta, sample: Sample) -> str:
     )
 
     # Register actual karla tools
-    await register_tools_with_letta(client, agent.id, working_dir)
+    await register_tools_with_crow(client, agent.id, working_dir)
 
     return agent.id

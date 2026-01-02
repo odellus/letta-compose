@@ -106,7 +106,7 @@ Large pages are truncated to avoid context overflow.""",
                 timeout=self._timeout,
                 follow_redirects=True,
                 headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; Karla/1.0; +https://github.com/letta-ai/karla)"
+                    "User-Agent": "Mozilla/5.0 (compatible; Karla/1.0; +https://github.com/crow-ai/karla)"
                 },
             ) as client:
                 response = await client.get(url)

@@ -1,4 +1,4 @@
-"""Skill tool - manages skill loading/unloading in Letta memory blocks."""
+"""Skill tool - manages skill loading/unloading in Crow memory blocks."""
 
 import logging
 import re
@@ -67,7 +67,7 @@ def extract_skills_dir(skills_block_value: str) -> str | None:
 
 
 class SkillTool(Tool):
-    """Manage skill loading and unloading via Letta memory blocks.
+    """Manage skill loading and unloading via Crow memory blocks.
 
     Skills are markdown files (SKILL.md) that contain context-specific
     instructions, patterns, or knowledge. This tool loads them into the
@@ -140,7 +140,7 @@ Usage:
             agent_ctx = get_context()
         except RuntimeError:
             return ToolResult.error(
-                "No agent context available. Skill tool requires Letta integration."
+                "No agent context available. Skill tool requires Crow integration."
             )
 
         client = agent_ctx.client
@@ -160,7 +160,7 @@ Usage:
             logger.exception(f"Skill {command} failed")
             return ToolResult.error(f"Failed to {command} skill(s): {e}")
 
-    async def _get_skills_dir(self, client: "Letta", agent_id: str, working_dir: str) -> Path:
+    async def _get_skills_dir(self, client: "Crow", agent_id: str, working_dir: str) -> Path:
         """Get the skills directory, trying multiple sources."""
         if self._skills_dir:
             return Path(self._skills_dir)
@@ -181,7 +181,7 @@ Usage:
         # Fall back to default .skills directory
         return Path(working_dir) / SKILLS_DIR
 
-    async def _refresh_skills(self, client: "Letta", agent_id: str, skills_dir: Path) -> ToolResult:
+    async def _refresh_skills(self, client: "Crow", agent_id: str, skills_dir: Path) -> ToolResult:
         """Discover and list available skills."""
         skills = []
         errors = []
@@ -235,7 +235,7 @@ Usage:
 
     async def _load_skills(
         self,
-        client: "Letta",
+        client: "Crow",
         agent_id: str,
         skills_dir: Path,
         skill_ids: list[str],
@@ -288,7 +288,7 @@ Usage:
 
     async def _unload_skills(
         self,
-        client: "Letta",
+        client: "Crow",
         agent_id: str,
         skill_ids: list[str],
     ) -> ToolResult:

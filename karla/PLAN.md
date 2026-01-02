@@ -57,7 +57,7 @@ Need to add:
 - `/remember`, `/init`: User-initiated prompt updates
 
 ### Tool Execution
-- Tools registered as Python stubs on Letta server
+- Tools registered as Python stubs on Crow server
 - Actual execution happens client-side
 - Results sent back via approval flow
 - Letta never runs our code
@@ -106,7 +106,7 @@ src/karla/
 # Unit tests
 uv run pytest tests/ -x -q
 
-# Integration tests (requires Letta server)
+# Integration tests (requires Crow server)
 uv run pytest tests/test_integration.py -v
 
 # Manual testing
@@ -121,7 +121,7 @@ uv run karla repl
 ```yaml
 # karla.yaml
 server:
-  base_url: http://localhost:8283
+  base_url: http://localhost:9999
   timeout: null  # No timeout for local LLMs
 
 llm:
