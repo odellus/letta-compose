@@ -5,11 +5,13 @@ Provides HTTP and WebSocket endpoints for the IDE.
 """
 
 import os
+from pathlib import Path
 from starlette.applications import Starlette
-from starlette.routing import Route, WebSocketRoute
+from starlette.routing import Route, WebSocketRoute, Mount
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, FileResponse
 from starlette.websockets import WebSocket
+from starlette.staticfiles import StaticFiles
 
 from crow_ide.api.files import (
     list_files_sync,
@@ -118,8 +120,21 @@ async def acp_websocket(websocket: WebSocket) -> None:
     await bridge.handle(websocket)
 
 
+# Frontend paths
+FRONTEND_DIR = Path(__file__).parent / "frontend" / "dist"
+INDEX_HTML = FRONTEND_DIR / "index.html"
+
+
+async def index(request: Request) -> FileResponse:
+    """Serve the frontend index.html."""
+    if INDEX_HTML.exists():
+        return FileResponse(INDEX_HTML)
+    return JSONResponse({"error": "Frontend not built. Run: cd crow_ide/frontend && pnpm build"}, status_code=404)
+
+
 # Define routes
 routes = [
+    Route("/", index, methods=["GET"]),
     Route("/api/health", health, methods=["GET"]),
     Route("/api/files/list", list_files, methods=["POST"]),
     Route("/api/files/details", file_details, methods=["POST"]),
@@ -129,6 +144,10 @@ routes = [
     WebSocketRoute("/terminal", terminal_websocket),
     WebSocketRoute("/acp", acp_websocket),
 ]
+
+# Add static file serving if frontend is built
+if FRONTEND_DIR.exists():
+    routes.append(Mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets"))
 
 # Create app
 app = Starlette(routes=routes, debug=True)
