@@ -1,12 +1,12 @@
 # Ralph Loop State
 
-## Current Phase: 3
+## Current Phase: 4
 
 ## Phase Status
 - Phase 1: Backend tests - COMPLETE (31 passed)
 - Phase 2: Frontend build - COMPLETE (built in 2.20s)
-- Phase 3: Server runs - IN PROGRESS
-- Phase 4: E2E Playwright - PENDING
+- Phase 3: Server runs - COMPLETE (uvicorn on :8000, health check OK)
+- Phase 4: E2E Playwright - IN PROGRESS
 - Phase 5: Agent works - PENDING
 - Phase 6: Prompt tuning - PENDING
 
@@ -19,3 +19,4 @@
 - Started: 2026-01-02
 - Phase 1 complete: 2026-01-02 - All 31 tests pass
 - Phase 2 complete: 2026-01-02 - Frontend builds successfully
+- Phase 3 complete: 2026-01-02 - Server runs on :8000
