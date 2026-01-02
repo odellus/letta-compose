@@ -95,10 +95,10 @@ class Tool(ABC):
         """Optional: human-readable summary of execution for logs/display."""
         return None
 
-    def to_crow_source(self, strict: bool = True) -> str:
-        """Generate Python source code for Crow tool registration.
+    def to_letta_source(self, strict: bool = True) -> str:
+        """Generate Python source code for Letta tool registration.
 
-        Tools are registered with Crow as stubs that raise exceptions,
+        Tools are registered with Letta as stubs that raise exceptions,
         since actual execution happens client-side.
 
         Args:
@@ -129,7 +129,7 @@ class Tool(ABC):
 
         signature = ", ".join(sig_parts)
 
-        # Build docstring - Crow parses Args section for parameter descriptions
+        # Build docstring - Letta parses Args section for parameter descriptions
         # Format must match Lares: Args: at column 0 relative to docstring content
         docstring_lines = [defn.description]
         if params:
@@ -137,7 +137,7 @@ class Tool(ABC):
             docstring_lines.append("Args:")
             for param_name, param_info in params.items():
                 param_desc = param_info.get("description", "No description")
-                # Ensure description is not empty (Crow requires it)
+                # Ensure description is not empty (Letta requires it)
                 if not param_desc.strip():
                     param_desc = f"The {param_name} parameter"
                 docstring_lines.append(f"    {param_name}: {param_desc}")

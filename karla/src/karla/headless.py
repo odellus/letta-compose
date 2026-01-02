@@ -11,26 +11,26 @@ Key functions:
 import logging
 from typing import Optional
 
-from crow_client import Crow
+from letta_client import Letta
 
 from karla.agent_loop import run_agent_loop, AgentResponse, OutputFormat, format_response
 from karla.config import KarlaConfig, create_client
 from karla.executor import ToolExecutor
-from karla.crow import register_tools_with_crow
+from karla.letta import register_tools_with_letta
 from karla.settings import SettingsManager
 from karla.tools import create_default_registry
 
 logger = logging.getLogger(__name__)
 
 
-def resolve_pending_approvals(client: Crow, agent_id: str) -> None:
+def resolve_pending_approvals(client: Letta, agent_id: str) -> None:
     """Clear any pending tool approvals before new input.
 
     This ensures the agent starts fresh without any dangling approval requests
     from previous sessions.
 
     Args:
-        client: Crow client
+        client: Letta client
         agent_id: Agent ID to clear approvals for
     """
     # Crow handles this automatically, but this function exists for

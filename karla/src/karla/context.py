@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from crow_client import Crow
+    from letta_client import Letta
 
 
 @dataclass
@@ -31,7 +31,7 @@ class AgentContext:
     and any running subagents.
     """
 
-    client: "Crow"
+    client: "Letta"
     agent_id: str
     working_dir: str
     skills_dir: str | None = None

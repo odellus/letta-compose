@@ -33,11 +33,30 @@ Frontend build:
 
 ### Visual Verification (Playwright MCP)
 - File Tree: Shows FILES header with folder/file listing (data-testid="file-tree" found)
-- Agent Chat: Shows "Agent Chat" with "Connected" status (data-testid="agent-panel" found)
-  - Sends JSON-RPC messages to mock agent
-  - Receives and displays properly formatted responses ("Echo: Hello agent!")
+- Agent Chat: Shows "Agent Chat" with "Ready" status (data-testid="agent-panel" found)
+  - Connected to real karla agent via `npx stdio-to-ws karla-acp --port 3000`
+  - Uses `use-acp` library for proper ACP protocol communication
+  - Successfully sends prompts and receives agent responses
+  - Tool calls display with titles and file locations (Write, Bash, Read, Find, etc.)
+  - E2E Test 1: Created /tmp/test_crow_ide.txt with "Hello from Crow IDE!" - 3 tool calls displayed
+  - E2E Test 2: Listed crow_ide/frontend/src/components/ - ls tool call and file sizes displayed
 - Terminal: Shows working shell prompt, executes commands (data-testid="terminal" found)
+  - E2E Test: Ran `echo "Terminal works!" && cat /tmp/test_crow_ide.txt` - output displayed correctly
 - All components interactive and functional
+
+### ACP Integration Details
+- Frontend uses `use-acp` npm package (like marimo)
+- Uses `groupNotifications` from use-acp to properly group streaming messages
+- Uses `mergeConsecutiveTextBlocks` to combine text chunks (same pattern as marimo)
+- Uses `mergeToolCalls` from use-acp to display tool calls with status indicators
+- Uses `react-markdown` for rendering agent responses with proper formatting
+- Connects directly to agent WebSocket at `ws://localhost:3000/message`
+- Agent started via: `npx stdio-to-ws karla-acp --port 3000`
+- Full ACP protocol flow: initialize → newSession → prompt → response
+- Session management working with unique session IDs
+- Streaming responses display as single coherent messages (not fragmented)
+- Tool calls display with title, file locations, and status icons (✓ completed, ⟳ in-progress, ✗ failed)
+- Markdown rendering: bold, code, lists, headers, code blocks all render properly
 
 ### Git Log
 ```
@@ -60,3 +79,4 @@ Phase 1: Add ACP Bridge with passing tests
 - [x] Git log shows commits for each phase
 - [x] Real Playwright browser tests pass (file-tree, agent-panel, terminal visible)
 - [x] Visual inspection with Playwright MCP tools confirms all UI components working
+- [x] Real karla agent integration tested and working via ACP protocol

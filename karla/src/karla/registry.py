@@ -36,13 +36,13 @@ class ToolRegistry:
         """
         return [tool.definition().to_openai_schema(strict=strict) for tool in self._tools.values()]
 
-    def to_crow_sources(self, strict: bool = True) -> dict[str, str]:
-        """Get all tools as Crow-compatible Python source code.
+    def to_letta_sources(self, strict: bool = True) -> dict[str, str]:
+        """Get all tools as Letta-compatible Python source code.
 
         Args:
             strict: If True, generates strict-mode compatible signatures for llama.cpp.
         """
-        return {tool.name: tool.to_crow_source(strict=strict) for tool in self._tools.values()}
+        return {tool.name: tool.to_letta_source(strict=strict) for tool in self._tools.values()}
 
     def __iter__(self):
         return iter(self._tools.values())

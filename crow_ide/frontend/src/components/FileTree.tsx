@@ -23,7 +23,7 @@ export function FileTree() {
       const response = await fetch('/api/files/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: currentPath || '.' }),
+        body: JSON.stringify(currentPath ? { path: currentPath } : {}),
       })
       const data = await response.json()
       setFiles(data.files || [])

@@ -4,14 +4,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from crow_client import Crow
+    from letta_client import Letta
     from karla.settings import SettingsManager
 
 
 @dataclass
 class CommandContext:
     """Context passed to command handlers."""
-    client: "Crow"
+    client: "Letta"
     agent_id: str
     working_dir: str
     settings: "SettingsManager"

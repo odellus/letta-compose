@@ -1,6 +1,6 @@
 """Memory block utilities for Karla agents.
 
-Crow agents use memory blocks to maintain persistent state across conversations.
+Letta agents use memory blocks to maintain persistent state across conversations.
 Karla uses the following blocks:
 - persona: Agent identity and learned preferences
 - human: Information about the user
@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from crow_client import Crow
+from letta_client import Letta
 
 from karla.prompts import get_human, get_persona, get_project
 
@@ -31,14 +31,14 @@ class MemoryBlock:
     description: Optional[str] = None
 
 
-def create_persona_block(client: Crow) -> MemoryBlock:
+def create_persona_block(client: Letta) -> MemoryBlock:
     """Create the persona memory block.
 
     The persona block contains the agent's identity and learned preferences.
     It's initialized with default content from prompts/persona.md.
 
     Args:
-        client: Crow client
+        client: Letta client
 
     Returns:
         MemoryBlock with the created block's info
@@ -60,13 +60,13 @@ def create_persona_block(client: Crow) -> MemoryBlock:
     )
 
 
-def create_human_block(client: Crow) -> MemoryBlock:
+def create_human_block(client: Letta) -> MemoryBlock:
     """Create the human memory block.
 
     The human block contains information about the user.
 
     Args:
-        client: Crow client
+        client: Letta client
 
     Returns:
         MemoryBlock with the created block's info
@@ -88,13 +88,13 @@ def create_human_block(client: Crow) -> MemoryBlock:
     )
 
 
-def create_project_block(client: Crow) -> MemoryBlock:
+def create_project_block(client: Letta) -> MemoryBlock:
     """Create the project memory block.
 
     The project block contains project-specific knowledge and context.
 
     Args:
-        client: Crow client
+        client: Letta client
 
     Returns:
         MemoryBlock with the created block's info
@@ -116,13 +116,13 @@ def create_project_block(client: Crow) -> MemoryBlock:
     )
 
 
-def create_skills_block(client: Crow, skills_list: str = "") -> MemoryBlock:
+def create_skills_block(client: Letta, skills_list: str = "") -> MemoryBlock:
     """Create the skills directory memory block.
 
     Lists all available skills that can be loaded.
 
     Args:
-        client: Crow client
+        client: Letta client
         skills_list: Formatted list of available skills
 
     Returns:
@@ -145,13 +145,13 @@ def create_skills_block(client: Crow, skills_list: str = "") -> MemoryBlock:
     )
 
 
-def create_loaded_skills_block(client: Crow) -> MemoryBlock:
+def create_loaded_skills_block(client: Letta) -> MemoryBlock:
     """Create the loaded skills memory block.
 
     Tracks which skills are currently loaded into agent memory.
 
     Args:
-        client: Crow client
+        client: Letta client
 
     Returns:
         MemoryBlock with the created block's info
@@ -173,11 +173,11 @@ def create_loaded_skills_block(client: Crow) -> MemoryBlock:
     )
 
 
-def create_default_memory_blocks(client: Crow, skills_list: str = "") -> list[MemoryBlock]:
+def create_default_memory_blocks(client: Letta, skills_list: str = "") -> list[MemoryBlock]:
     """Create all default memory blocks for a Karla agent.
 
     Args:
-        client: Crow client
+        client: Letta client
         skills_list: Optional formatted list of available skills
 
     Returns:
@@ -294,11 +294,11 @@ def generate_project_context(working_dir: str) -> str:
     return "\n".join(lines)
 
 
-def update_project_block(client: Crow, agent_id: str, working_dir: str) -> None:
+def update_project_block(client: Letta, agent_id: str, working_dir: str) -> None:
     """Update the project memory block with current context.
 
     Args:
-        client: Crow client
+        client: Letta client
         agent_id: Agent ID to update
         working_dir: Working directory path
     """

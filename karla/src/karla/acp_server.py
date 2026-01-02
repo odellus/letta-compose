@@ -57,7 +57,7 @@ from karla.commands import (  # Import from main module to register commands
 )
 from karla.config import KarlaConfig, create_client, load_config
 from karla.context import AgentContext, clear_context, set_context
-from karla.crow import register_tools_with_crow
+from karla.letta import register_tools_with_letta
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager
 from karla.hotl.loop import create_hotl_hooks

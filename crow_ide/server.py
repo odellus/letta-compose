@@ -21,7 +21,7 @@ from crow_ide.api.files import (
     delete_file_sync,
 )
 from crow_ide.api.terminal import TerminalHandler
-from crow_ide.acp_bridge import ACPBridge
+from crow_ide.acp_bridge import ACPBridge, ACPWebSocketProxy
 
 
 async def health(request: Request) -> JSONResponse:
@@ -114,12 +114,11 @@ async def terminal_websocket(websocket: WebSocket) -> None:
 
 async def acp_websocket(websocket: WebSocket) -> None:
     """Handle ACP WebSocket connections."""
-    # Default ACP command (can be configured via env)
-    # Uses mock_agent.py by default for demo purposes
-    default_command = f"python3 {Path(__file__).parent / 'mock_agent.py'}"
-    command = os.environ.get("CROW_ACP_COMMAND", default_command).split()
-    bridge = ACPBridge(command)
-    await bridge.handle(websocket)
+    # Connect to stdio-to-ws karla agent running on port 3000
+    # Start stdio-to-ws separately: npx stdio-to-ws karla
+    target_url = os.environ.get("CROW_ACP_URL", "ws://localhost:3000")
+    proxy = ACPWebSocketProxy(target_url)
+    await proxy.handle(websocket)
 
 
 # Frontend paths

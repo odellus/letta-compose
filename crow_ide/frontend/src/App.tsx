@@ -1,6 +1,6 @@
 import { FileTree } from './components/FileTree'
 import { Terminal } from './components/Terminal'
-import { AgentPanel } from './components/AgentPanel'
+import AgentPanel from './components/acp/agent-panel'
 import './App.css'
 
 function App() {

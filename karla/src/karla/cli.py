@@ -21,7 +21,7 @@ from karla.context import AgentContext, set_context, clear_context
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager, HooksConfig as HooksConfigRuntime
 from karla.hotl import HOTLLoop
-from karla.crow import register_tools_with_crow
+from karla.letta import register_tools_with_letta
 from karla.memory import create_default_memory_blocks, get_block_ids
 from karla.prompts import get_default_system_prompt, get_persona
 from karla.settings import SettingsManager
@@ -103,6 +103,7 @@ def create_agent(client, config: KarlaConfig, name: str | None = None, working_d
     block_ids = get_block_ids(memory_blocks)
     logger.info("Created %d memory blocks: %s", len(block_ids), [b.label for b in memory_blocks])
 
+    # Create the Letta agent
     agent = client.agents.create(
         name=name,
         system=system_prompt,
@@ -113,20 +114,20 @@ def create_agent(client, config: KarlaConfig, name: str | None = None, working_d
         kv_cache_friendly=config.agent_defaults.kv_cache_friendly,
     )
 
-    # Attach the memory tool for full memory management
-    # (memory_read/insert/replace come from sleeptime, but unified memory tool is separate)
+    logger.info("Created agent: %s (id=%s)", name, agent.id)
+
+    # Attach the unified 'memory' tool for full memory management
     try:
-        memory_tools_response = client.tools.list(name="memory")
-        # Handle paginated response
-        memory_tools = list(memory_tools_response) if memory_tools_response else []
+        memory_tools = list(client.tools.list(name="memory"))
         if memory_tools:
             memory_tool = memory_tools[0]
             client.agents.tools.attach(agent_id=agent.id, tool_id=memory_tool.id)
-            logger.info("Attached memory tool to agent")
+            logger.info("Attached memory tool to agent: %s", memory_tool.id)
+        else:
+            logger.warning("Memory tool not found on server")
     except Exception as e:
         logger.warning("Could not attach memory tool: %s", e)
 
-    logger.info("Created agent: %s (id=%s)", name, agent.id)
     return agent.id
 
 
@@ -223,7 +224,7 @@ async def headless_mode(
     # which breaks KV cache (LCP similarity drops from ~100% to ~26%)
     registry = create_default_registry(working_dir)
     if is_new:
-        register_tools_with_crow(client, agent_id, registry)
+        register_tools_with_letta(client, agent_id, registry)
 
     # Create executor
     executor = ToolExecutor(registry, working_dir)
@@ -411,7 +412,7 @@ async def interactive_mode(
     # Create registry and only register tools for new agents
     registry = create_default_registry(working_dir)
     if is_new:
-        register_tools_with_crow(client, agent_id, registry)
+        register_tools_with_letta(client, agent_id, registry)
 
     # Create executor
     executor = ToolExecutor(registry, working_dir)

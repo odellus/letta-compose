@@ -29,7 +29,7 @@ def _expand_env_vars(obj: Any) -> Any:
 
 
 if TYPE_CHECKING:
-    from crow_client import Crow
+    from letta_client import Letta
 
 
 @dataclass
@@ -51,7 +51,7 @@ class ProviderConfig:
 
 @dataclass
 class LLMConfig:
-    """LLM configuration for Crow agents."""
+    """LLM configuration for Letta agents."""
 
     model: str
     model_endpoint: str
@@ -60,7 +60,7 @@ class LLMConfig:
     api_key: str | None = None  # API key for the endpoint
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert to dict for Crow client."""
+        """Convert to dict for Letta client."""
         result = {
             "model": self.model,
             "model_endpoint": self.model_endpoint,
@@ -79,13 +79,13 @@ class EmbeddingConfig:
     model: str  # e.g. "ollama/mxbai-embed-large:latest"
 
     def to_string(self) -> str:
-        """Convert to string for Crow client."""
+        """Convert to string for Letta client."""
         return self.model
 
 
 @dataclass
 class ServerConfig:
-    """Crow server configuration."""
+    """Letta server configuration."""
 
     base_url: str = "http://localhost:8283"
     # Timeout for LLM requests in seconds. None = no timeout (wait forever)
@@ -283,8 +283,8 @@ def load_config(path: str | Path | None = None) -> KarlaConfig:
     return config
 
 
-def create_client(config: KarlaConfig) -> "Crow":
-    """Create a Crow client from karla config.
+def create_client(config: KarlaConfig) -> "Letta":
+    """Create a Letta client from karla config.
 
     This creates a client with appropriate timeout settings for local LLMs.
 
@@ -292,11 +292,11 @@ def create_client(config: KarlaConfig) -> "Crow":
         config: KarlaConfig instance
 
     Returns:
-        Configured Crow client
+        Configured Letta client
     """
-    from crow_client import Crow
+    from letta_client import Letta
 
-    return Crow(
+    return Letta(
         base_url=config.server.base_url,
         timeout=config.server.timeout,  # None = no timeout
     )

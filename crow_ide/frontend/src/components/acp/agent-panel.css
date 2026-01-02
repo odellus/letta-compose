@@ -1,0 +1,31 @@
+/* Crow IDE Agent Panel Styles */
+.crow-agent-panel {
+  pre {
+    width: 100%;
+  }
+}
+
+.crow-agent-panel .prose {
+  max-width: none;
+}
+
+.crow-agent-panel .prose pre {
+  background-color: #1f2937;
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  border: 1px solid #374151;
+}
+
+.crow-agent-panel .prose code {
+  background-color: #374151;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.25rem;
+  font-size: 0.875rem;
+  color: #e5e7eb;
+}
+
+.crow-agent-panel .prose pre code {
+  background-color: transparent;
+  padding: 0;
+}

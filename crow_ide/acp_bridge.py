@@ -8,6 +8,8 @@ stdin/stdout, enabling communication with ACP-compatible agents.
 import asyncio
 from typing import List
 
+import websockets
+
 
 class ACPBridge:
     """Bridge WebSocket connections to subprocess stdio."""
@@ -89,3 +91,66 @@ class ACPBridge:
                 data += b'\n'
             self._process.stdin.write(data)
             await self._process.stdin.drain()
+
+
+class ACPWebSocketProxy:
+    """Proxy WebSocket connections to another WebSocket server."""
+
+    def __init__(self, target_url: str):
+        """Initialize the proxy with a target WebSocket URL.
+
+        Args:
+            target_url: WebSocket URL to connect to (e.g., ws://localhost:3000).
+        """
+        self.target_url = target_url
+        self._target_ws = None
+
+    async def handle(self, websocket) -> None:
+        """Handle a WebSocket connection by proxying to target.
+
+        Args:
+            websocket: Starlette WebSocket connection.
+        """
+        await websocket.accept()
+
+        try:
+            async with websockets.connect(self.target_url) as target_ws:
+                self._target_ws = target_ws
+
+                # Create tasks for bidirectional forwarding
+                client_to_target = asyncio.create_task(
+                    self._forward_client_to_target(websocket, target_ws)
+                )
+                target_to_client = asyncio.create_task(
+                    self._forward_target_to_client(websocket, target_ws)
+                )
+
+                # Wait for either task to complete
+                done, pending = await asyncio.wait(
+                    [client_to_target, target_to_client],
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                # Cancel pending tasks
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+        except Exception as e:
+            # Send error to client if connection fails
+            try:
+                await websocket.send_text(f'{{"error": "Failed to connect to agent: {e}"}}')
+            except:
+                pass
+
+    async def _forward_client_to_target(self, client_ws, target_ws) -> None:
+        """Forward messages from client to target WebSocket."""
+        async for message in client_ws.iter_text():
+            await target_ws.send(message)
+
+    async def _forward_target_to_client(self, client_ws, target_ws) -> None:
+        """Forward messages from target to client WebSocket."""
+        async for message in target_ws:
+            await client_ws.send_text(message)

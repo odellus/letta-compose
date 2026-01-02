@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Awaitable, Callable, Optional, Union
 
-from crow_client import Crow
+from letta_client import Letta
 
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager, run_hooks
@@ -107,7 +107,7 @@ def parse_message_response(response) -> tuple[Optional[str], list[PendingToolCal
 
 
 def send_approval(
-    client: Crow,
+    client: Letta,
     agent_id: str,
     tool_call_id: str,
     result: str,
@@ -116,7 +116,7 @@ def send_approval(
     """Send tool execution result back to Crow via approval flow.
 
     Args:
-        client: Crow client
+        client: Letta client
         agent_id: Agent ID
         tool_call_id: ID of the tool call being responded to
         result: Tool execution output
@@ -158,7 +158,7 @@ async def _maybe_await(result: Union[None, Awaitable[None]]) -> None:
 
 
 async def _stream_message(
-    client: Crow,
+    client: Letta,
     agent_id: str,
     messages: list,
     on_text: Optional[TextCallback] = None,
@@ -169,7 +169,7 @@ async def _stream_message(
     """Stream a message and return accumulated text and any pending tool calls.
 
     Args:
-        client: Crow client
+        client: Letta client
         agent_id: Agent ID
         messages: Messages to send
         on_text: Callback for text chunks (called for each token)
@@ -248,7 +248,7 @@ async def _stream_message(
                 tool_calls_in_progress[tc_id]["arguments"] += tc_args
 
         # Stop/usage messages are just logged
-        elif chunk_type in ("CrowStopReason", "CrowUsageStatistics"):
+        elif chunk_type in ("LettaStopReason", "LettaUsageStatistics"):
             logger.debug("Stream end: %s", chunk_type)
 
     # Convert accumulated tool calls to PendingToolCall objects
@@ -270,7 +270,7 @@ async def _stream_message(
 
 
 async def _send_approval(
-    client: Crow,
+    client: Letta,
     agent_id: str,
     tool_call_id: str,
     result: str,
@@ -282,7 +282,7 @@ async def _send_approval(
     """Send tool result and stream the response.
 
     Args:
-        client: Crow client
+        client: Letta client
         agent_id: Agent ID
         tool_call_id: ID of the tool call being responded to
         result: Tool execution output
@@ -313,7 +313,7 @@ async def _send_approval(
 
 
 async def run_agent_loop(
-    client: Crow,
+    client: Letta,
     agent_id: str,
     executor: ToolExecutor,
     message: str,
@@ -338,7 +338,7 @@ async def run_agent_loop(
     Includes retry logic for transient API errors.
 
     Args:
-        client: Crow client
+        client: Letta client
         agent_id: Agent ID
         executor: Tool executor for client-side execution
         message: Initial user message
