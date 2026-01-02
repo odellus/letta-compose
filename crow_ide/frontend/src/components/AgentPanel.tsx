@@ -26,7 +26,15 @@ export function AgentPanel() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        setMessages((prev) => [...prev, { role: 'agent', content: JSON.stringify(data, null, 2) }])
+        // Handle JSON-RPC response format
+        if (data.result?.response) {
+          setMessages((prev) => [...prev, { role: 'agent', content: data.result.response }])
+        } else if (data.error) {
+          setMessages((prev) => [...prev, { role: 'agent', content: `Error: ${data.error.message}` }])
+        } else {
+          // Fallback for unknown response format
+          setMessages((prev) => [...prev, { role: 'agent', content: JSON.stringify(data, null, 2) }])
+        }
       } catch {
         setMessages((prev) => [...prev, { role: 'agent', content: event.data }])
       }

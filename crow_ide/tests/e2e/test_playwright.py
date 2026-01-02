@@ -16,18 +16,28 @@ def server():
     """Start the server for E2E tests."""
     # Set workspace to crow_ide directory itself for testing
     env = os.environ.copy()
-    env["CROW_WORKSPACE"] = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    crow_ide_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    env["CROW_WORKSPACE"] = crow_ide_dir
 
-    # Start uvicorn in background
+    # Get project root (parent of crow_ide)
+    project_root = os.path.dirname(crow_ide_dir)
+
+    # Start uvicorn in background from project root
     proc = subprocess.Popen(
         ["uvicorn", "crow_ide.server:app", "--port", "8765"],
         env=env,
+        cwd=project_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
 
-    # Wait for server to start
-    time.sleep(2)
+    # Wait for server to start and verify it's running
+    time.sleep(3)
+
+    # Check if process is still running
+    if proc.poll() is not None:
+        stdout, stderr = proc.communicate()
+        raise RuntimeError(f"Server failed to start: {stderr.decode()}")
 
     yield "http://localhost:8765"
 

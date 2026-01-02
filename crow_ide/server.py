@@ -115,7 +115,9 @@ async def terminal_websocket(websocket: WebSocket) -> None:
 async def acp_websocket(websocket: WebSocket) -> None:
     """Handle ACP WebSocket connections."""
     # Default ACP command (can be configured via env)
-    command = os.environ.get("CROW_ACP_COMMAND", "cat").split()
+    # Uses mock_agent.py by default for demo purposes
+    default_command = f"python3 {Path(__file__).parent / 'mock_agent.py'}"
+    command = os.environ.get("CROW_ACP_COMMAND", default_command).split()
     bridge = ACPBridge(command)
     await bridge.handle(websocket)
 
