@@ -29,16 +29,70 @@ mermaid.initialize({
 
 interface MermaidBlockProps {
   code: string;
+  isStreaming?: boolean;
 }
 
-const MermaidBlock = memo<MermaidBlockProps>(({ code }) => {
+/**
+ * Check if mermaid code looks complete enough to attempt rendering.
+ * Mermaid diagrams need at least a diagram type declaration (graph, flowchart, sequenceDiagram, etc.)
+ */
+function isMermaidCodeComplete(code: string): boolean {
+  const trimmed = code.trim();
+  if (!trimmed) return false;
+
+  // Must have a diagram type declaration
+  const diagramTypes = [
+    'graph', 'flowchart', 'sequenceDiagram', 'classDiagram', 'stateDiagram',
+    'erDiagram', 'journey', 'gantt', 'pie', 'quadrantChart', 'requirementDiagram',
+    'gitGraph', 'mindmap', 'timeline', 'zenuml', 'sankey', 'xychart', 'block'
+  ];
+
+  const firstLine = trimmed.split('\n')[0].toLowerCase();
+  const hasDiagramType = diagramTypes.some(type =>
+    firstLine.startsWith(type.toLowerCase()) || firstLine.startsWith(type.toLowerCase() + '-')
+  );
+
+  if (!hasDiagramType) return false;
+
+  // Check for common incomplete patterns (mid-line cuts)
+  const incompleteSuffixes = ['->', '-->', '---|', '-.', '==', ':::', '-->|'];
+  if (incompleteSuffixes.some(suffix => trimmed.endsWith(suffix))) {
+    return false;
+  }
+
+  // Must have at least 2 lines for most diagrams (type + content)
+  const lines = trimmed.split('\n').filter(l => l.trim());
+  if (lines.length < 2 && !['pie', 'mindmap'].includes(firstLine.split(/\s/)[0])) {
+    return false;
+  }
+
+  return true;
+}
+
+const MermaidBlock = memo<MermaidBlockProps>(({ code, isStreaming = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  const [renderAttempted, setRenderAttempted] = useState(false);
+  const lastCodeRef = useRef<string>("");
+
+  const isComplete = isMermaidCodeComplete(code);
 
   useEffect(() => {
+    // Don't re-render if code hasn't changed
+    if (code === lastCodeRef.current) return;
+    lastCodeRef.current = code;
+
     const renderDiagram = async () => {
       if (!code.trim()) return;
+
+      // Don't attempt to render incomplete code while streaming
+      if (!isComplete && isStreaming) {
+        setRenderAttempted(false);
+        return;
+      }
+
+      setRenderAttempted(true);
 
       try {
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
@@ -47,21 +101,41 @@ const MermaidBlock = memo<MermaidBlockProps>(({ code }) => {
         setError(null);
       } catch (err) {
         console.error("Mermaid render error:", err);
-        setError(err instanceof Error ? err.message : "Failed to render diagram");
+        const errorMsg = err instanceof Error ? err.message : "Failed to render diagram";
+        setError(errorMsg);
+        setSvg("");
       }
     };
 
-    renderDiagram();
-  }, [code]);
+    // Debounce render attempts during streaming
+    const timeoutId = setTimeout(renderDiagram, isStreaming ? 500 : 0);
+    return () => clearTimeout(timeoutId);
+  }, [code, isComplete, isStreaming]);
+
+  // Show streaming indicator for incomplete code
+  if (!isComplete || (!renderAttempted && isStreaming)) {
+    return (
+      <div className="border border-blue-700/50 bg-blue-900/20 rounded p-3 my-2">
+        <div className="flex items-center gap-2 text-xs text-blue-400 mb-2">
+          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+          </svg>
+          <span>Rendering diagram...</span>
+        </div>
+        <pre className="text-xs text-gray-400 whitespace-pre-wrap font-mono">{code}</pre>
+      </div>
+    );
+  }
 
   if (error) {
     return (
       <div className="border border-red-700 bg-red-900/20 rounded p-3 my-2">
-        <div className="text-xs text-red-400 mb-1">Mermaid Error:</div>
-        <pre className="text-xs text-red-300 whitespace-pre-wrap">{error}</pre>
+        <div className="text-xs text-red-400 mb-1 font-medium">Mermaid Error:</div>
+        <pre className="text-xs text-red-300 whitespace-pre-wrap mb-2">{error}</pre>
         <details className="mt-2">
-          <summary className="text-xs text-gray-400 cursor-pointer">Show code</summary>
-          <pre className="text-xs text-gray-300 mt-1 whitespace-pre-wrap">{code}</pre>
+          <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-300">Show code</summary>
+          <pre className="text-xs text-gray-300 mt-1 whitespace-pre-wrap bg-gray-800 p-2 rounded">{code}</pre>
         </details>
       </div>
     );
@@ -88,16 +162,17 @@ MermaidBlock.displayName = "MermaidBlock";
 interface CodeBlockProps {
   className?: string;
   children?: React.ReactNode;
+  isStreaming?: boolean;
 }
 
-const CodeBlock = ({ className, children }: CodeBlockProps) => {
+const CodeBlock = ({ className, children, isStreaming = false }: CodeBlockProps) => {
   const match = /language-(\w+)/.exec(className || "");
   const language = match ? match[1] : "";
   const code = String(children).replace(/\n$/, "");
 
   // Handle mermaid code blocks
   if (language === "mermaid") {
-    return <MermaidBlock code={code} />;
+    return <MermaidBlock code={code} isStreaming={isStreaming} />;
   }
 
   // Regular code block
@@ -111,9 +186,39 @@ const CodeBlock = ({ className, children }: CodeBlockProps) => {
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  isStreaming?: boolean;
 }
 
-export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, className }) => {
+/**
+ * Detect if markdown content has unclosed code blocks (streaming in progress)
+ */
+function hasUnclosedCodeBlock(content: string): boolean {
+  const codeBlockPattern = /```/g;
+  const matches = content.match(codeBlockPattern);
+  // Odd number of ``` means unclosed block
+  return matches ? matches.length % 2 !== 0 : false;
+}
+
+/**
+ * Detect if content has unclosed LaTeX blocks
+ */
+function hasUnclosedLatex(content: string): boolean {
+  // Check for unclosed $$ blocks
+  const displayMathMatches = content.match(/\$\$/g);
+  if (displayMathMatches && displayMathMatches.length % 2 !== 0) return true;
+
+  // Check for unclosed \[ \] blocks
+  const bracketOpen = (content.match(/\\\[/g) || []).length;
+  const bracketClose = (content.match(/\\\]/g) || []).length;
+  if (bracketOpen !== bracketClose) return true;
+
+  return false;
+}
+
+export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, className, isStreaming: isStreamingProp }) => {
+  // Auto-detect streaming if not explicitly provided
+  const isStreaming = isStreamingProp ?? (hasUnclosedCodeBlock(content) || hasUnclosedLatex(content));
+
   return (
     <div className={`prose prose-sm max-w-none prose-invert ${className || ""}`}>
       <ReactMarkdown
@@ -130,7 +235,7 @@ export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, classNam
                 </code>
               );
             }
-            return <CodeBlock className={className}>{children}</CodeBlock>;
+            return <CodeBlock className={className} isStreaming={isStreaming}>{children}</CodeBlock>;
           },
           // Style pre blocks
           pre: ({ children }) => <>{children}</>,

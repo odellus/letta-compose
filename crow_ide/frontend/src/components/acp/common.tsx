@@ -27,6 +27,7 @@ interface SimpleAccordionProps {
   status?: "loading" | "error" | "success";
   index?: number;
   defaultIcon?: React.ReactNode;
+  durationMs?: number;
 }
 
 export const SimpleAccordion: React.FC<SimpleAccordionProps> = ({
@@ -35,18 +36,25 @@ export const SimpleAccordion: React.FC<SimpleAccordionProps> = ({
   status,
   index = 0,
   defaultIcon,
+  durationMs,
 }) => {
   const getStatusIcon = () => {
     switch (status) {
       case "loading":
-        return <Loader2 className="h-3 w-3 animate-spin" />;
+        return <Loader2 className="h-3 w-3 animate-spin text-yellow-400" />;
       case "error":
         return <XCircleIcon className="h-3 w-3 text-red-500" />;
       case "success":
-        return <CheckCircleIcon className="h-3 w-3 text-blue-500" />;
+        return <CheckCircleIcon className="h-3 w-3 text-green-500" />;
       default:
         return defaultIcon;
     }
+  };
+
+  const formatDuration = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
   };
 
   return (
@@ -59,14 +67,20 @@ export const SimpleAccordion: React.FC<SimpleAccordionProps> = ({
       <AccordionItem value="tool-call" className="border-0">
         <AccordionTrigger
           className={cn(
-            "py-1 text-xs border-gray-700 bg-gray-800 hover:bg-gray-700 px-2 gap-1 rounded-sm [&[data-state=open]>svg]:rotate-180",
-            status === "error" && "text-red-400/80",
-            status === "success" && "text-blue-400"
+            "py-1.5 text-xs border border-gray-700 bg-gray-800/80 hover:bg-gray-700 px-2 gap-1 rounded-md [&[data-state=open]>svg]:rotate-180 transition-all",
+            status === "error" && "border-red-700/50 bg-red-900/20 text-red-400/80",
+            status === "success" && "border-green-700/30 text-gray-300",
+            status === "loading" && "border-yellow-700/30 bg-yellow-900/10"
           )}
         >
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1.5 flex-1 min-w-0">
             {getStatusIcon()}
-            <code className="font-mono text-xs truncate">{title}</code>
+            <code className="font-mono text-xs truncate flex-1">{title}</code>
+            {durationMs !== undefined && status === "success" && (
+              <span className="text-[10px] text-gray-500 font-normal ml-auto shrink-0">
+                {formatDuration(durationMs)}
+              </span>
+            )}
           </span>
         </AccordionTrigger>
         <AccordionContent className="p-2">

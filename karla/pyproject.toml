@@ -5,7 +5,7 @@ description = "A Python coding agent with Crow backend and ACP support"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "crow-client",
+    "letta-client",
     "pydantic>=2.0",
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-crow-client = { workspace = true }
+letta-client = { workspace = true }
 agent-client-protocol = { path = "../python-sdk", editable = true }
 
 [project.scripts]

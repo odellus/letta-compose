@@ -227,6 +227,45 @@ async def validate_directory(request: Request) -> JSONResponse:
     return JSONResponse({"valid": False, "error": "Not a valid directory"}, status_code=400)
 
 
+async def list_directories(request: Request) -> JSONResponse:
+    """List subdirectories in a directory for the directory browser."""
+    data = await request.json()
+    path = data.get("path", os.path.expanduser("~"))
+
+    # Expand ~ to home directory
+    expanded = os.path.expanduser(path)
+
+    try:
+        absolute = os.path.abspath(expanded)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    if not os.path.isdir(absolute):
+        return JSONResponse({"error": "Not a valid directory"}, status_code=400)
+
+    try:
+        entries = []
+        for entry in sorted(os.listdir(absolute)):
+            # Skip hidden directories
+            if entry.startswith('.'):
+                continue
+            full_path = os.path.join(absolute, entry)
+            if os.path.isdir(full_path):
+                entries.append({
+                    "name": entry,
+                    "path": full_path,
+                })
+        return JSONResponse({
+            "path": absolute,
+            "parent": os.path.dirname(absolute) if absolute != "/" else None,
+            "directories": entries,
+        })
+    except PermissionError:
+        return JSONResponse({"error": "Permission denied"}, status_code=403)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # Define routes
 routes = [
     Route("/", index, methods=["GET"]),
@@ -243,6 +282,7 @@ routes = [
     Route("/api/sessions/delete", delete_session, methods=["POST"]),
     # Directory operations
     Route("/api/directories/validate", validate_directory, methods=["POST"]),
+    Route("/api/directories/list", list_directories, methods=["POST"]),
     # WebSocket endpoints
     WebSocketRoute("/terminal", terminal_websocket),
     WebSocketRoute("/acp", acp_websocket),

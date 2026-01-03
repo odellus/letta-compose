@@ -525,7 +525,12 @@ export const SessionNotificationsBlock = <
   const renderItems = (items: T[]) => {
     if (isToolCalls(items)) {
       return (
-        <ToolNotificationsBlock data={items} isLastBlock={props.isLastBlock} />
+        <ToolNotificationsBlock
+          data={items}
+          isLastBlock={props.isLastBlock}
+          startTimestamp={props.startTimestamp}
+          endTimestamp={props.endTimestamp}
+        />
       );
     }
     if (isAgentThoughts(items)) {
@@ -583,11 +588,42 @@ export const CurrentModeBlock = (props: {
 export const ToolNotificationsBlock = (props: {
   data: (ToolCallNotificationEvent | ToolCallUpdateNotificationEvent)[];
   isLastBlock: boolean;
+  startTimestamp?: number;
+  endTimestamp?: number;
 }) => {
   const toolCalls = mergeToolCalls(props.data);
 
+  // Calculate duration for each tool call by looking at the raw events
+  const toolDurations = new Map<string, number>();
+  const toolStartTimes = new Map<string, number>();
+
+  // Group events by toolCallId and find start/end times
+  props.data.forEach((event, index) => {
+    const toolCallId = event.toolCallId;
+    if (!toolCallId) return;
+
+    // Use index as a proxy for time ordering if no timestamps
+    if (!toolStartTimes.has(toolCallId)) {
+      toolStartTimes.set(toolCallId, index);
+    }
+
+    // If this is a completed/failed status, calculate duration
+    if (event.sessionUpdate === "tool_call_update" &&
+        (event.status === "completed" || event.status === "failed")) {
+      const startIndex = toolStartTimes.get(toolCallId) ?? 0;
+      // Each event roughly represents some time passing
+      // Use timestamp diff if available from parent, else estimate
+      if (props.startTimestamp && props.endTimestamp) {
+        const totalDuration = props.endTimestamp - props.startTimestamp;
+        const eventsCount = props.data.length;
+        const eventDuration = totalDuration / eventsCount;
+        toolDurations.set(toolCallId, Math.round((index - startIndex + 1) * eventDuration));
+      }
+    }
+  });
+
   return (
-    <div className="flex flex-col text-gray-400 overflow-x-hidden">
+    <div className="flex flex-col gap-1 text-gray-400 overflow-x-hidden">
       {toolCalls.map((item) => (
         <SimpleAccordion
           key={item.toolCallId}
@@ -597,7 +633,7 @@ export const ToolNotificationsBlock = (props: {
               : item.status === "failed"
               ? "error"
               : (item.status === "in_progress" || item.status === "pending") &&
-                !props.isLastBlock
+                props.isLastBlock
               ? "loading"
               : undefined
           }
@@ -607,6 +643,7 @@ export const ToolNotificationsBlock = (props: {
             </span>
           }
           defaultIcon={<WrenchIcon className="h-3 w-3" />}
+          durationMs={toolDurations.get(item.toolCallId)}
         >
           <ToolBodyBlock data={item} />
         </SimpleAccordion>
@@ -656,17 +693,68 @@ export const ToolBodyBlock = (props: {
     | Omit<ToolCallNotificationEvent, "sessionUpdate">
     | Omit<ToolCallUpdateNotificationEvent, "sessionUpdate">;
 }) => {
-  const { content, locations, kind, rawInput } = props.data;
+  const { content, locations, kind, rawInput, rawOutput } = props.data as {
+    content?: ToolCallContent[];
+    locations?: ToolCallLocation[];
+    kind?: string;
+    rawInput?: Record<string, unknown>;
+    rawOutput?: Record<string, unknown>;
+  };
   const textContent = content
     ?.filter((item) => item.type === "content")
     .map((item) => (item as ToolCallContent & { type: "content" }).content);
   const hasLocations = locations && locations.length > 0;
 
+  // Render parameters section
+  const renderParams = () => {
+    if (!rawInput || Object.keys(rawInput).length === 0) return null;
+
+    return (
+      <div className="mb-2">
+        <div className="text-[10px] uppercase text-gray-500 mb-1 font-semibold">Parameters</div>
+        <div className="bg-gray-900/50 border border-gray-700/50 rounded p-2 text-xs">
+          {Object.entries(rawInput).map(([key, value]) => (
+            <div key={key} className="flex gap-2 mb-1 last:mb-0">
+              <span className="text-purple-400 shrink-0">{key}:</span>
+              <span className="text-gray-300 break-all">
+                {typeof value === "string" ? value : JSON.stringify(value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Render output section
+  const renderOutput = () => {
+    if (!rawOutput) return null;
+
+    const outputStr = rawOutput.output
+      ? String(rawOutput.output)
+      : JSON.stringify(rawOutput, null, 2);
+
+    // Truncate very long outputs
+    const displayOutput = outputStr.length > 500
+      ? outputStr.substring(0, 500) + "\n... (truncated)"
+      : outputStr;
+
+    return (
+      <div>
+        <div className="text-[10px] uppercase text-gray-500 mb-1 font-semibold">Output</div>
+        <pre className="bg-gray-900/50 border border-gray-700/50 rounded p-2 text-xs text-gray-300 overflow-auto max-h-48 whitespace-pre-wrap break-words">
+          {displayOutput}
+        </pre>
+      </div>
+    );
+  };
+
   if (!content && !hasLocations && rawInput) {
     return (
-      <pre className="bg-gray-800 p-1 text-gray-300 border border-gray-700 rounded text-xs overflow-auto max-h-64">
-        {JSON.stringify(rawInput, null, 2)}
-      </pre>
+      <div className="flex flex-col gap-2">
+        {renderParams()}
+        {renderOutput()}
+      </div>
     );
   }
 
@@ -678,6 +766,8 @@ export const ToolBodyBlock = (props: {
           {capitalize(kind || "")}{" "}
           {locations?.map((item) => item.path).join(", ")}
         </span>
+        {renderParams()}
+        {renderOutput()}
       </div>
     );
   }
@@ -685,7 +775,9 @@ export const ToolBodyBlock = (props: {
   return (
     <div className="flex flex-col gap-2 pr-2">
       {locations && <LocationsBlock data={locations} />}
+      {renderParams()}
       {textContent && <ContentBlocks data={textContent} />}
+      {renderOutput()}
     </div>
   );
 };

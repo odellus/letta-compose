@@ -2,7 +2,7 @@
 
 from karla.commands.registry import register, CommandType, COMMANDS
 from karla.commands.context import CommandContext
-from karla.memory import update_project_block
+from karla.memory import update_project_block, update_system_prompt
 
 
 @register("/clear", "Clear conversation history", CommandType.API, order=10)
@@ -13,7 +13,9 @@ async def cmd_clear(ctx: CommandContext) -> str:
         add_default_initial_messages=False,
     )
 
-    # Refresh project memory block with current environment context
+    # Refresh BOTH the system prompt AND the project memory block
+    # The system prompt has a hardcoded "Working directory:" that must be updated
+    update_system_prompt(ctx.client, ctx.agent_id, ctx.working_dir)
     update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
 
     return "Conversation cleared. Project context refreshed."
@@ -24,7 +26,12 @@ async def cmd_compact(ctx: CommandContext) -> str:
     """Compact/summarize the conversation."""
     try:
         result = ctx.client.agents.messages.compact(agent_id=ctx.agent_id)
-        return f"Compacted {result.num_messages_before} -> {result.num_messages_after} messages"
+
+        # Also refresh system prompt and project block to ensure consistency
+        update_system_prompt(ctx.client, ctx.agent_id, ctx.working_dir)
+        update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
+
+        return f"Compacted {result.num_messages_before} -> {result.num_messages_after} messages. Context refreshed."
     except Exception as e:
         # Compact may not be available on all Crow server versions
         return f"Compact not available: {e}"
@@ -33,6 +40,8 @@ async def cmd_compact(ctx: CommandContext) -> str:
 @register("/refresh", "Refresh project context (git status, files)", CommandType.CLI, order=13)
 async def cmd_refresh(ctx: CommandContext) -> str:
     """Refresh the project memory block with current environment."""
+    # Update both system prompt and project memory block
+    update_system_prompt(ctx.client, ctx.agent_id, ctx.working_dir)
     update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
     return "Project context refreshed (cwd, git status, key files)."
 

@@ -611,17 +611,56 @@ const AgentPanel: React.FC = () => {
   }, [agent]);
 
   // Auto-connect when wsUrl changes (agent selected)
+  // Also auto-reconnect when connection drops
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
+  const reconnectDelay = useRef(1000); // Start with 1 second
+
   useEffect(() => {
     if (wsUrl === NO_WS_SET) {
       return;
     }
 
-    logger.debug("Auto-connecting to agent");
-    void connect().catch((error) => {
-      logger.error("Failed to connect to agent", { error });
-    });
+    const attemptConnect = async () => {
+      try {
+        logger.debug("Connecting to agent", { attempt: reconnectAttempts.current + 1 });
+        await connect();
+        // Reset on successful connection
+        reconnectAttempts.current = 0;
+        reconnectDelay.current = 1000;
+      } catch (error) {
+        logger.error("Failed to connect to agent", { error, attempt: reconnectAttempts.current + 1 });
+      }
+    };
+
+    attemptConnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsUrl]);
+
+  // Auto-reconnect when connection drops unexpectedly
+  useEffect(() => {
+    if (wsUrl === NO_WS_SET) {
+      return;
+    }
+
+    if (connectionState.status === "disconnected" && reconnectAttempts.current < maxReconnectAttempts) {
+      const timer = setTimeout(() => {
+        reconnectAttempts.current += 1;
+        logger.info("Auto-reconnecting to agent", {
+          attempt: reconnectAttempts.current,
+          delay: reconnectDelay.current,
+        });
+        connect().catch((error) => {
+          logger.error("Auto-reconnect failed", { error });
+          // Exponential backoff
+          reconnectDelay.current = Math.min(reconnectDelay.current * 2, 30000);
+        });
+      }, reconnectDelay.current);
+
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionState.status, wsUrl]);
 
   // Handle workspace changes - clear sessions and send /clear to reset agent context
   useEffect(() => {

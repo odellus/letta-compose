@@ -21,7 +21,7 @@ def get_db_path() -> Path:
     """Get the database path, creating parent directory if needed."""
     db_path = DEFAULT_DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    return db_path
+    return db_path 
 
 
 @contextmanager

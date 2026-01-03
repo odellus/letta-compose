@@ -54,7 +54,7 @@ def list_files_sync(workspace: str, relative_path: Optional[str] = None) -> Dict
     for entry in os.scandir(target_path):
         files.append({
             "name": entry.name,
-            "path": str(Path(entry.path).relative_to(workspace)),
+            "path": str(Path(entry.path).resolve()),
             "is_directory": entry.is_dir(),
             "size": entry.stat().st_size if entry.is_file() else 0,
         })

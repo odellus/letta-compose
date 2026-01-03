@@ -197,6 +197,93 @@ The agent is in `../karla/src/karla/`:
 | `tools/` | Tool implementations (Read, Write, Bash, etc.) |
 | `letta.py` | Letta backend integration |
 
+## ACP Protocol (Agent Client Protocol)
+
+ACP is a JSON-RPC 2.0 based protocol for communication between AI agents and clients (editors, IDEs).
+
+### Protocol Resources
+
+| Resource | Location |
+|----------|----------|
+| Python SDK | `../python-sdk/` - Install: `pip install agent-client-protocol` |
+| Claude Code ACP | `../claude-code-acp/` - Reference implementation |
+| crow_agent docs | `../crow_agent/docs/src/acp/` - Protocol deep-dives |
+| use-acp (React) | Frontend uses `use-acp` npm package for ACP client |
+| Official site | https://agentclientprotocol.com/ |
+| Zulip community | https://agentclientprotocol.zulipchat.com/ |
+
+### Key ACP Methods
+
+| Method | Direction | Description |
+|--------|-----------|-------------|
+| `initialize` | Client → Agent | Initialize the connection |
+| `session/new` | Client → Agent | Create a new session |
+| `session/prompt` | Client → Agent | Send a prompt to the agent |
+| `session/cancel` | Client → Agent | Cancel an ongoing operation |
+
+### Session Update Notifications (Agent → Client)
+
+| Update Type | Description |
+|-------------|-------------|
+| `agent_message_chunk` | Text content streaming |
+| `agent_thought_chunk` | Reasoning/thinking content |
+| `tool_call` | Tool execution started |
+| `tool_call_update` | Tool execution completed/status |
+| `plan` | Todo list updates |
+
+### Tool Call Status Values
+
+Tool calls have a `status` field that should be reflected in the UI:
+- `pending` - Tool call queued
+- `in_progress` - Tool is executing (show spinner)
+- `completed` - Tool finished successfully (show checkmark)
+- `failed` - Tool execution failed (show error icon)
+
+## Playwright Testing Methodology
+
+Claude Code uses Playwright to visually test and compare agent implementations.
+
+### Side-by-Side Testing
+
+When developing Crow IDE, test the same prompts against **both** Crow IDE and Claude Code to:
+1. Compare model performance and response quality
+2. Learn from Claude Code's UI/UX patterns
+3. Identify features to port to Crow IDE
+4. Verify ACP protocol compliance
+
+### Running Side-by-Side Tests
+
+```bash
+# Terminal 1: Crow IDE
+uvicorn crow_ide.server:app --port 8000
+# Test at http://localhost:8000
+
+# Terminal 2: Claude Code (via claude-code-acp)
+npx @zed-industries/claude-code-acp
+# Or use Zed editor's agent panel
+```
+
+### What to Compare
+
+| Aspect | What to Look For |
+|--------|------------------|
+| Tool call display | Spinners, status icons, collapsible details |
+| Streaming | Real-time text appearance, chunking |
+| Error handling | How errors are shown, retry options |
+| Markdown rendering | Code blocks, mermaid, latex |
+| Session management | Tab switching, history, context clearing |
+
+### Testing Methodology Loop
+
+1. **Identify feature** - Pick a UI/UX feature to test
+2. **Test in Claude Code** - Take screenshots, note behavior
+3. **Test in Crow IDE** - Compare against Claude Code
+4. **Document differences** - Note what Claude Code does better
+5. **Implement improvements** - Port good patterns to Crow IDE
+6. **Re-test** - Verify the improvement works
+
+This approach leverages Claude's intimate knowledge of its own tooling (tool descriptions are in context) to improve Crow IDE.
+
 ## Patience Reminders
 
 1. Local LLM is slow - that's okay

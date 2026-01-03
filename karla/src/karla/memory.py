@@ -313,3 +313,24 @@ def update_project_block(client: Letta, agent_id: str, working_dir: str) -> None
             return
 
     logger.warning("No project block found for agent %s", agent_id)
+
+
+def update_system_prompt(client: Letta, agent_id: str, working_dir: str) -> None:
+    """Update the agent's system prompt with current working directory.
+
+    The system prompt has a hardcoded "Working directory:" line that needs
+    to be updated when the working directory changes.
+
+    Args:
+        client: Letta client
+        agent_id: Agent ID to update
+        working_dir: New working directory path
+    """
+    from karla.prompts import get_default_system_prompt
+
+    # Generate new system prompt with updated working directory
+    new_system_prompt = get_default_system_prompt(working_dir=working_dir)
+
+    # Update the agent's system prompt
+    client.agents.update(agent_id=agent_id, system=new_system_prompt)
+    logger.info("Updated system prompt for agent %s with cwd=%s", agent_id, working_dir)

@@ -594,7 +594,8 @@ class KarlaAgent(Agent):
                     tool_call_id=tc_id,
                     status="failed" if is_error else "completed",
                     content=result_content if result_content else None,
-                    raw_output=output,
+                    # ACP protocol expects rawOutput to be an object, not a string
+                    raw_output={"output": output} if output else None,
                 ),
             )
 

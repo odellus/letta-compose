@@ -180,6 +180,40 @@ body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+/* Dirty indicator for unsaved changes */
+.crow-dirty-indicator {
+  color: var(--crow-accent-pink);
+  margin-left: 4px;
+  font-size: 10px;
+}
+
+/* Save button */
+.crow-save-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--crow-text-primary);
+  background: var(--crow-glass-bg-light);
+  border: 1px solid var(--crow-glass-border);
+  border-radius: var(--crow-radius-sm);
+  cursor: pointer;
+  transition: all var(--crow-transition-fast);
+}
+
+.crow-save-button:hover:not(:disabled) {
+  background: var(--crow-accent-primary);
+  border-color: var(--crow-accent-primary);
+  box-shadow: var(--crow-glow-purple);
+}
+
+.crow-save-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Editor Section - Main file viewing area with subtle glass effect */
 .crow-editor-section {
   flex: 1;
@@ -230,6 +264,29 @@ body {
   font-family: var(--crow-font-mono);
   font-size: 13px;
   color: var(--crow-text-secondary);
+  height: 100%;
+  overflow: auto;
+}
+
+.crow-file-code {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+}
+
+.crow-file-code code {
+  font-family: var(--crow-font-mono);
+}
+
+.crow-file-loading {
+  color: var(--crow-text-muted);
+  padding: var(--crow-space-lg);
+}
+
+.crow-file-error {
+  color: var(--crow-accent-pink);
+  padding: var(--crow-space-lg);
 }
 
 /* Files Section - Glass panel on right side */
