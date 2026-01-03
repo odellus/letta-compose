@@ -21,8 +21,8 @@ import {
   XIcon,
 } from "lucide-react";
 import React from "react";
-import ReactMarkdown from "react-markdown";
 import { JsonRpcError, mergeToolCalls } from "use-acp";
+import { MarkdownRenderer } from "./markdown-renderer";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { cn, uniqueByTakeLast, Strings } from "./adapters";
@@ -364,11 +364,7 @@ export const AgentMessagesBlock = (props: {
 export const ContentBlocks = (props: { data: ContentBlock[] }) => {
   const renderBlock = (block: ContentBlock) => {
     if (block.type === "text") {
-      return (
-        <div className="prose prose-sm max-w-none">
-          <ReactMarkdown>{block.text}</ReactMarkdown>
-        </div>
-      );
+      return <MarkdownRenderer content={block.text} />;
     }
     if (block.type === "image") {
       return <ImageBlock data={block as ContentBlockOf<"image">} />;
@@ -438,9 +434,7 @@ export const ResourceBlock = (props: { data: ContentBlockOf<"resource"> }) => {
               {props.data.resource.text}
             </pre>
           ) : (
-            <div className="prose prose-sm max-w-none">
-              <ReactMarkdown>{props.data.resource.text}</ReactMarkdown>
-            </div>
+            <MarkdownRenderer content={props.data.resource.text} />
           )}
         </PopoverContent>
       </Popover>

@@ -394,6 +394,13 @@ class KarlaAgent(Agent):
         **kwargs: Any,
     ) -> LoadSessionResponse | None:
         """Load an existing session (session_id is the Crow agent_id)."""
+        # Check if this session was already created by new_session
+        if session_id in self._sessions:
+            logger.info("Session %s already exists, returning", session_id)
+            # Send available commands to client
+            asyncio.create_task(self._send_available_commands(session_id))
+            return LoadSessionResponse()
+
         client = create_client(self._config)
 
         # Get existing agent

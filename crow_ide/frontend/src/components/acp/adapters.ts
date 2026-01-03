@@ -120,11 +120,23 @@ export async function blobToString(
   });
 }
 
-// Crow IDE specific: Get current working directory
-// This would be provided by the crow_ide context
+// Crow IDE specific: Current working directory management
+// This is updated by App.tsx when workspace changes
+let _currentWorkspace: string | null = null;
+
+export function setCurrentWorkspace(path: string | null): void {
+  _currentWorkspace = path;
+}
+
 export function getCrowCwd(): string {
-  // For crow_ide, we'll use the current project root
-  return '/home/thomas/src/projects/letta-proj/crow_ide';
+  if (!_currentWorkspace) {
+    throw new Error("No workspace selected");
+  }
+  return _currentWorkspace;
+}
+
+export function hasWorkspace(): boolean {
+  return _currentWorkspace !== null;
 }
 
 // Crow IDE specific: File operations

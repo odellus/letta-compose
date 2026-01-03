@@ -4,6 +4,7 @@ import { useAtom } from "jotai";
 import { capitalize } from "lodash-es";
 import {
   BotMessageSquareIcon,
+  ClockIcon,
   Loader2,
   RefreshCwIcon,
   SendIcon,
@@ -21,6 +22,7 @@ import { AgentDocs } from "./agent-docs";
 import { AgentSelector } from "./agent-selector";
 import { ModelSelector } from "./model-selector";
 import ScrollToBottomButton from "./scroll-to-bottom-button";
+import { SessionHistory } from "./session-history";
 import { SessionTabs } from "./session-tabs";
 import {
   agentSessionStateAtom,
@@ -30,6 +32,7 @@ import {
   selectedTabAtom,
   updateSessionExternalAgentSessionId,
   updateSessionTitle,
+  workspaceAtom,
 } from "./state";
 import { AgentThread } from "./thread";
 import { ReadyToChatBlock } from "./blocks";
@@ -104,6 +107,7 @@ interface AgentPanelHeaderProps {
   onConnect: () => void;
   onDisconnect: () => void;
   onRestartThread?: () => void;
+  onShowHistory?: () => void;
   hasActiveSession?: boolean;
   shouldShowConnectionControl?: boolean;
 }
@@ -115,6 +119,7 @@ const AgentPanelHeader = memo<AgentPanelHeaderProps>(
     onConnect,
     onDisconnect,
     onRestartThread,
+    onShowHistory,
     hasActiveSession,
     shouldShowConnectionControl,
   }) => (
@@ -125,6 +130,18 @@ const AgentPanelHeader = memo<AgentPanelHeaderProps>(
         shouldShowConnectionControl={shouldShowConnectionControl}
       />
       <div className="flex items-center gap-2">
+        {onShowHistory && (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={onShowHistory}
+            title="View session history"
+          >
+            <ClockIcon className="h-3 w-3 mr-1" />
+            History
+          </Button>
+        )}
+
         {hasActiveSession &&
           connectionState.status === "connected" &&
           onRestartThread && (
@@ -157,10 +174,11 @@ interface EmptyStateProps {
   connectionState: AgentConnectionState;
   onConnect: () => void;
   onDisconnect: () => void;
+  onShowHistory: () => void;
 }
 
 const EmptyState = memo<EmptyStateProps>(
-  ({ currentAgentId, connectionState, onConnect, onDisconnect }) => {
+  ({ currentAgentId, connectionState, onConnect, onDisconnect, onShowHistory }) => {
     return (
       <div className="flex flex-col h-full">
         <AgentPanelHeader
@@ -168,6 +186,7 @@ const EmptyState = memo<EmptyStateProps>(
           currentAgentId={currentAgentId}
           onConnect={onConnect}
           onDisconnect={onDisconnect}
+          onShowHistory={onShowHistory}
           hasActiveSession={false}
         />
         <SessionTabs />
@@ -266,6 +285,18 @@ const PromptArea = memo<PromptAreaProps>(
     sessionModels,
     onModelChange,
   }) => {
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const wasLoadingRef = useRef(false);
+
+    // Auto-focus textarea when loading completes
+    useEffect(() => {
+      if (wasLoadingRef.current && !isLoading) {
+        // Loading just finished, focus the textarea
+        textareaRef.current?.focus();
+      }
+      wasLoadingRef.current = isLoading;
+    }, [isLoading]);
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -286,10 +317,11 @@ const PromptArea = memo<PromptAreaProps>(
         <div
           className={cn(
             "px-3 py-2 min-h-[60px]",
-            (isLoading || !activeSessionId) && "opacity-50 pointer-events-none"
+            isLoading && "opacity-50 pointer-events-none"
           )}
         >
           <textarea
+            ref={textareaRef}
             value={promptValue}
             onChange={(e) => onPromptValueChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -299,7 +331,7 @@ const PromptArea = memo<PromptAreaProps>(
                 : "Ask anything..."
             }
             className={cn(
-              "w-full min-h-[40px] max-h-[120px] p-2 text-sm border border-gray-700 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-800 text-gray-100 placeholder-gray-500",
+              "w-full min-h-[40px] max-h-[120px] p-2 text-sm border border-gray-700 rounded resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-800 text-gray-100 placeholder-gray-500",
               isLoading && "opacity-50 pointer-events-none"
             )}
             disabled={isLoading}
@@ -316,19 +348,34 @@ const PromptArea = memo<PromptAreaProps>(
                 />
               )}
             </div>
-            <div className="flex flex-row">
-              <Tooltip content={isLoading ? "Stop" : "Submit"}>
+            <div className="flex flex-row gap-2 items-center">
+              <span className="text-xs text-gray-500">
+                {isLoading ? "" : "Enter to send, Shift+Enter for newline"}
+              </span>
+              <Tooltip content={isLoading ? "Stop" : "Send message"}>
                 <Button
-                  variant="text"
+                  variant={isLoading ? "outline" : "default"}
                   size="sm"
-                  className="h-6 w-6 p-0 hover:bg-gray-700 cursor-pointer"
+                  className={cn(
+                    "h-8 px-3 cursor-pointer transition-colors",
+                    isLoading
+                      ? "bg-red-600 hover:bg-red-700 text-white border-red-600"
+                      : "bg-purple-600 hover:bg-purple-700 text-white border-purple-600",
+                    (!promptValue.trim() && !isLoading) && "opacity-50 cursor-not-allowed"
+                  )}
                   onClick={isLoading ? onStop : handleSendClick}
                   disabled={isLoading ? false : !promptValue.trim()}
                 >
                   {isLoading ? (
-                    <SquareIcon className="h-3 w-3 fill-current" />
+                    <>
+                      <SquareIcon className="h-4 w-4 mr-1 fill-current" />
+                      Stop
+                    </>
                   ) : (
-                    <SendIcon className="h-3 w-3" />
+                    <>
+                      <SendIcon className="h-4 w-4 mr-1" />
+                      Send
+                    </>
                   )}
                 </Button>
               </Tooltip>
@@ -496,10 +543,13 @@ const AgentPanel: React.FC = () => {
   const [error, setError] = useState<Error | string | null>(null);
   const [promptValue, setPromptValue] = useState("");
   const [sessionModels, setSessionModels] = useState<SessionModelState | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const isCreatingNewSession = useRef(false);
 
   const [selectedTab] = useAtom(selectedTabAtom);
   const [sessionState, setSessionState] = useAtom(agentSessionStateAtom);
+  const [workspace] = useAtom(workspaceAtom);
+  const prevWorkspace = useRef(workspace);
 
   const wsUrl = selectedTab
     ? getAgentWebSocketUrl(selectedTab.agentId)
@@ -572,6 +622,33 @@ const AgentPanel: React.FC = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsUrl]);
+
+  // Handle workspace changes - clear sessions and send /clear to reset agent context
+  useEffect(() => {
+    if (prevWorkspace.current && workspace !== prevWorkspace.current) {
+      logger.info("Workspace changed, clearing sessions", {
+        from: prevWorkspace.current,
+        to: workspace,
+      });
+
+      // Send /clear command to reset agent context if we have an active session
+      if (agent && activeSessionId) {
+        agent.prompt({
+          sessionId: activeSessionId,
+          prompt: [{ type: "text", text: "/clear" }],
+        }).catch((error) => {
+          logger.error("Failed to send /clear command", { error });
+        });
+      }
+
+      // Clear all sessions - start fresh in new workspace
+      setSessionState({
+        sessions: [],
+        activeTabId: null,
+      });
+    }
+    prevWorkspace.current = workspace;
+  }, [workspace, agent, activeSessionId, setSessionState]);
 
   const handleNewSession = useCallback(async () => {
     if (!agent) {
@@ -781,6 +858,21 @@ const AgentPanel: React.FC = () => {
   const hasNotifications = notifications.length > 0;
   const hasActiveSessions = sessionState.sessions.length > 0;
 
+  // Show history panel if requested (takes priority over everything)
+  if (showHistory) {
+    return (
+      <div className="flex flex-col flex-1 overflow-hidden crow-agent-panel bg-gray-900 text-gray-100">
+        <SessionHistory
+          onClose={() => setShowHistory(false)}
+          onResumeSession={(sessionId) => {
+            logger.debug("Resume session from history", { sessionId });
+            handleResumeSession(sessionId as ExternalAgentSessionId);
+          }}
+        />
+      </div>
+    );
+  }
+
   if (!hasActiveSessions) {
     return (
       <EmptyState
@@ -788,6 +880,7 @@ const AgentPanel: React.FC = () => {
         connectionState={connectionState}
         onConnect={handleManualConnect}
         onDisconnect={handleManualDisconnect}
+        onShowHistory={() => setShowHistory(true)}
       />
     );
   }
@@ -885,6 +978,7 @@ const AgentPanel: React.FC = () => {
         onConnect={handleManualConnect}
         onDisconnect={handleManualDisconnect}
         onRestartThread={handleNewSession}
+        onShowHistory={() => setShowHistory(true)}
         hasActiveSession={true}
         shouldShowConnectionControl={wsUrl !== NO_WS_SET}
       />

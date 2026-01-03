@@ -1,3 +1,5 @@
+/* FileTree Component - Matching Crow IDE Design System */
+
 .file-tree {
   height: 100%;
   display: flex;
@@ -8,16 +10,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #888;
-}
-
-.file-tree-header {
-  padding: 12px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: #888;
-  border-bottom: 1px solid #3c3c3c;
+  color: var(--crow-text-muted, #6e7681);
+  font-size: 12px;
 }
 
 .file-list {
@@ -29,22 +23,46 @@
 }
 
 .file-item {
-  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background-color 150ms ease;
+  border-radius: 4px;
+  margin: 1px 4px;
 }
 
 .file-item:hover {
-  background-color: #2a2d2e;
+  background-color: var(--crow-bg-overlay, #21262d);
+}
+
+.file-item.selected {
+  background-color: rgba(31, 111, 235, 0.2);
+}
+
+.file-item.selected:hover {
+  background-color: rgba(31, 111, 235, 0.3);
 }
 
 .file-item.directory {
-  color: #c5c5c5;
+  color: var(--crow-text-primary, #e6edf3);
 }
 
 .file-item.file {
-  color: #9cdcfe;
+  color: var(--crow-text-secondary, #8b949e);
+}
+
+.file-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

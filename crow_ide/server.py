@@ -22,6 +22,7 @@ from crow_ide.api.files import (
 )
 from crow_ide.api.terminal import TerminalHandler
 from crow_ide.acp_bridge import ACPBridge, ACPWebSocketProxy
+from crow_ide.db import get_store
 
 
 async def health(request: Request) -> JSONResponse:
@@ -113,12 +114,82 @@ async def terminal_websocket(websocket: WebSocket) -> None:
 
 
 async def acp_websocket(websocket: WebSocket) -> None:
-    """Handle ACP WebSocket connections."""
-    # Connect to stdio-to-ws karla agent running on port 3000
-    # Start stdio-to-ws separately: npx stdio-to-ws karla
-    target_url = os.environ.get("CROW_ACP_URL", "ws://localhost:3000")
-    proxy = ACPWebSocketProxy(target_url)
-    await proxy.handle(websocket)
+    """Handle ACP WebSocket connections.
+
+    Query params:
+        url: Target WebSocket URL (e.g., ws://localhost:3000) - optional
+        agent: Agent type (e.g., karla, claude)
+        direct: If "true", spawn subprocess directly instead of proxying
+
+    For karla agent without explicit URL, spawns karla-acp directly as subprocess.
+    For other agents or explicit URLs, proxies to the WebSocket URL.
+    """
+    query_params = dict(websocket.query_params)
+    target_url = query_params.get("url")
+    agent_type = query_params.get("agent", "unknown")
+    use_direct = query_params.get("direct", "false").lower() == "true"
+
+    # For karla agent, spawn directly unless URL explicitly provided
+    if agent_type == "karla" and (not target_url or use_direct):
+        # Run from karla directory where karla.yaml config exists
+        karla_dir = Path(__file__).parent.parent / "karla"
+        bridge = ACPBridge(["karla-acp"], cwd=str(karla_dir))
+        await bridge.handle(websocket)
+    else:
+        # Proxy to external WebSocket URL
+        if not target_url:
+            target_url = os.environ.get("CROW_ACP_URL", "ws://localhost:3000/message")
+        proxy = ACPWebSocketProxy(target_url, agent_type=agent_type)
+        await proxy.handle(websocket)
+
+
+# Session history API endpoints
+
+async def list_sessions(request: Request) -> JSONResponse:
+    """List all sessions."""
+    store = get_store()
+    data = await request.json() if request.method == "POST" else {}
+    agent_type = data.get("agent_type")
+    limit = data.get("limit", 100)
+    offset = data.get("offset", 0)
+
+    sessions = store.list_sessions(agent_type=agent_type, limit=limit, offset=offset)
+    return JSONResponse({"sessions": sessions})
+
+
+async def get_session(request: Request) -> JSONResponse:
+    """Get a session by ID with all messages."""
+    data = await request.json()
+    session_id = data.get("session_id")
+
+    if not session_id:
+        return JSONResponse({"error": "session_id is required"}, status_code=400)
+
+    store = get_store()
+    session = store.get_session(session_id)
+
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+
+    messages = store.get_session_messages(session_id)
+    return JSONResponse({"session": session, "messages": messages})
+
+
+async def delete_session(request: Request) -> JSONResponse:
+    """Delete a session."""
+    data = await request.json()
+    session_id = data.get("session_id")
+
+    if not session_id:
+        return JSONResponse({"error": "session_id is required"}, status_code=400)
+
+    store = get_store()
+    deleted = store.delete_session(session_id)
+
+    if not deleted:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+
+    return JSONResponse({"success": True})
 
 
 # Frontend paths
@@ -133,15 +204,46 @@ async def index(request: Request) -> FileResponse:
     return JSONResponse({"error": "Frontend not built. Run: cd crow_ide/frontend && pnpm build"}, status_code=404)
 
 
+async def validate_directory(request: Request) -> JSONResponse:
+    """Validate that a path is a valid directory."""
+    data = await request.json()
+    path = data.get("path", "")
+
+    if not path:
+        return JSONResponse({"valid": False, "error": "Path is required"}, status_code=400)
+
+    # Expand ~ to home directory
+    expanded = os.path.expanduser(path)
+
+    # Resolve to absolute path
+    try:
+        absolute = os.path.abspath(expanded)
+    except Exception as e:
+        return JSONResponse({"valid": False, "error": str(e)}, status_code=400)
+
+    if os.path.isdir(absolute):
+        return JSONResponse({"valid": True, "path": absolute})
+
+    return JSONResponse({"valid": False, "error": "Not a valid directory"}, status_code=400)
+
+
 # Define routes
 routes = [
     Route("/", index, methods=["GET"]),
     Route("/api/health", health, methods=["GET"]),
+    # File operations
     Route("/api/files/list", list_files, methods=["POST"]),
     Route("/api/files/details", file_details, methods=["POST"]),
     Route("/api/files/create", create_file, methods=["POST"]),
     Route("/api/files/update", update_file, methods=["POST"]),
     Route("/api/files/delete", delete_file, methods=["POST"]),
+    # Session history
+    Route("/api/sessions/list", list_sessions, methods=["POST"]),
+    Route("/api/sessions/get", get_session, methods=["POST"]),
+    Route("/api/sessions/delete", delete_session, methods=["POST"]),
+    # Directory operations
+    Route("/api/directories/validate", validate_directory, methods=["POST"]),
+    # WebSocket endpoints
     WebSocketRoute("/terminal", terminal_websocket),
     WebSocketRoute("/acp", acp_websocket),
 ]

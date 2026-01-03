@@ -1,8 +1,84 @@
-# Karla Distillation System Design
+# Crow IDE Architecture & Roadmap
 
-## Vision
+## What is Crow IDE?
 
-Train Karla by distilling Claude Code's capabilities. Capture Claude Code solving problems, then use those demonstrations as training data for Karla.
+A web-based IDE with an integrated AI coding agent. **Agent-first design.**
+
+### Architecture
+
+```
+Browser (React/Vite)
+    |
+    v
+Starlette Server (:8000)
+    |
+    +---> /api/files/*  (REST)     -> File operations
+    +---> /terminal     (WebSocket) -> PTY subprocess
+    +---> /acp          (WebSocket) -> ACPWebSocketProxy
+                                          |
+                                          v
+                                    karla-acp (:3000)
+                                          |
+                                          v
+                                    Letta Server (:8283)
+                                          |
+                                          v
+                                    Local LLM (LM Studio)
+```
+
+### Backend (Python)
+
+| File | Purpose |
+|------|---------|
+| `server.py` | Starlette app, routes, serves frontend |
+| `acp_bridge.py` | WebSocket proxy to agent (ACPWebSocketProxy) |
+| `api/files.py` | File list/read/write/delete |
+| `api/terminal.py` | PTY terminal handler |
+
+### Frontend (React/TypeScript)
+
+| File | Purpose |
+|------|---------|
+| `App.tsx` | Main layout (sidebar + main + terminal) |
+| `components/FileTree.tsx` | File explorer |
+| `components/Terminal.tsx` | xterm.js terminal |
+| `components/acp/*` | Agent panel (from marimo) |
+
+### Current Layout (WRONG)
+
+```
++------------------+------------------------+
+|                  |                        |
+|    FileTree      |      AgentPanel        |
+|    (sidebar)     |      (editor-area)     |
+|                  |                        |
++------------------+------------------------+
+|                  Terminal                 |
++-------------------------------------------+
+```
+
+### Target Layout (AGENT-FIRST)
+
+```
++------------------------+------------------+
+|                        |                  |
+|                        |   File Editor    |
+|      AgentPanel        |   (view files    |
+|      (FULL LEFT)       |    agent edits)  |
+|                        +------------------+
+|                        |   File Explorer  |
+|                        |   (compact)      |
+|                        +------------------+
+|                        |    Terminal      |
++------------------------+------------------+
+```
+
+**Rationale:**
+- Agent is PRIMARY - gets full left panel
+- Files agent modifies appear in editor (right top)
+- File explorer is SMALL - just for navigation (right middle)
+- Terminal at bottom right
+- Agent changes -> tracked in editor view
 
 ---
 
@@ -15,46 +91,42 @@ Train Karla by distilling Claude Code's capabilities. Capture Claude Code solvin
 - Can retrieve full LLM request/response with `--llm` flag
 - This is foundational - we have observability
 
-## IDE Features Needed
+## Priority 1: Session Persistence
 
-### Multiple Terminals (Priority)
-- Current: Single terminal panel at bottom
-- Needed:
-  - **Plus button** to create new terminals
-  - **Draggable/floating** terminal windows
-  - Tab system or window management for multiple terminals
-  - Each terminal is independent PTY session
+Sessions must persist to database for:
+- Resuming work
+- Reviewing past sessions
+- Training data extraction
+- Core IDE functionality (not just distillation!)
 
-### UI Inspiration: Marimo
-- Marimo has sophisticated cell/panel management
-- Need to spelunk marimo codebase for:
-  - Draggable panel implementation
-  - Window/tab management patterns
-  - Resizable split views
-  - Floating windows
+## Priority 2: Layout Refactor
 
-### Other IDE Features to Explore
-- [ ] Split views (horizontal/vertical)
-- [ ] Floating/dockable panels
-- [ ] File tabs (open multiple files)
-- [ ] Minimap
-- [ ] Search across files
-- [ ] Git integration panel
-- [ ] Output/logs panel separate from terminal
+1. Agent panel -> full left side
+2. File editor -> right top (needs marimo exploration)
+3. File explorer -> compact, right middle
+4. Terminal -> right bottom
+5. Multiple terminals with + button, draggable
+
+## Priority 3: File Editor
+
+Need to add:
+- Code editor component (CodeMirror? Monaco?)
+- Track files agent modifies
+- Syntax highlighting
+- Multiple file tabs
 
 ## Marimo Code Exploration TODO
 
-Look at marimo's frontend for:
-1. Panel/window management system
-2. Drag and drop implementation
-3. State management for multiple panels
-4. Terminal implementation (if they have one)
-5. Layout persistence
+Marimo does NOT have terminal, but has:
+- Panel/window management
+- Drag and drop cells
+- Split views
+- Code editor (CodeMirror)
 
 Key directories to explore:
 - `marimo/frontend/src/components/`
 - `marimo/frontend/src/core/`
-- Look for: drag, panel, window, layout, split, dock
+- Look for: drag, panel, window, layout, split, editor
 
 ---
 

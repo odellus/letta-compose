@@ -1,7 +1,10 @@
+/* Terminal Component - Matching Crow IDE Design System */
+
 .terminal-container {
   height: 100%;
   width: 100%;
-  padding: 8px;
+  padding: 4px 8px;
+  background-color: var(--crow-bg-base, #0d1117);
 }
 
 .terminal-container .xterm {
@@ -10,4 +13,27 @@
 
 .terminal-container .xterm-viewport {
   overflow-y: auto !important;
+}
+
+/* Custom xterm theme matching our design */
+.terminal-container .xterm-screen {
+  padding: 4px 0;
+}
+
+/* Scrollbar styling for terminal */
+.terminal-container .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
+  background-color: var(--crow-border-default, #30363d);
+  border-radius: 4px;
+}
+
+.terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background-color: var(--crow-border-emphasis, #484f58);
 }

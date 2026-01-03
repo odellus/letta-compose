@@ -17,8 +17,29 @@ export function Terminal() {
       fontSize: 14,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
+        // Shades of Purple theme
+        background: '#1e1e3f',
+        foreground: '#e6e6e6',
+        cursor: '#fad000',
+        cursorAccent: '#1e1e3f',
+        selectionBackground: 'rgba(179, 98, 255, 0.3)',
+        // Standard colors with purple tints
+        black: '#000000',
+        red: '#ff628c',
+        green: '#a5ff90',
+        yellow: '#fad000',
+        blue: '#9effff',
+        magenta: '#b362ff',
+        cyan: '#80fcff',
+        white: '#ffffff',
+        brightBlack: '#7e74a8',
+        brightRed: '#ff628c',
+        brightGreen: '#a5ff90',
+        brightYellow: '#ffea00',
+        brightBlue: '#9effff',
+        brightMagenta: '#ff9d00',
+        brightCyan: '#80fcff',
+        brightWhite: '#ffffff',
       },
     })
 

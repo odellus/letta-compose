@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useAtom } from 'jotai'
+import { workspaceAtom } from './acp/state'
 import './FileTree.css'
 
 interface FileEntry {
@@ -8,22 +10,42 @@ interface FileEntry {
   size: number
 }
 
-export function FileTree() {
+interface FileTreeProps {
+  onFileSelect?: (path: string) => void
+}
+
+export function FileTree({ onFileSelect }: FileTreeProps) {
+  const [workspace] = useAtom(workspaceAtom)
   const [files, setFiles] = useState<FileEntry[]>([])
-  const [currentPath, setCurrentPath] = useState('')
+  const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+
+  // Reset to workspace root when workspace changes
+  useEffect(() => {
+    setCurrentPath(null)
+    setSelectedPath(null)
+  }, [workspace])
 
   useEffect(() => {
     loadFiles()
-  }, [currentPath])
+  }, [currentPath, workspace])
 
   const loadFiles = async () => {
+    // Don't load if no workspace is selected
+    if (!workspace) {
+      setFiles([])
+      setLoading(false)
+      return
+    }
+
+    const basePath = currentPath || workspace
     setLoading(true)
     try {
       const response = await fetch('/api/files/list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentPath ? { path: currentPath } : {}),
+        body: JSON.stringify({ path: basePath }),
       })
       const data = await response.json()
       setFiles(data.files || [])
@@ -37,7 +59,29 @@ export function FileTree() {
   const handleClick = (file: FileEntry) => {
     if (file.is_directory) {
       setCurrentPath(file.path)
+    } else {
+      setSelectedPath(file.path)
+      onFileSelect?.(file.path)
     }
+  }
+
+  // Check if we're in a subdirectory (not at workspace root)
+  const isInSubdirectory = currentPath !== null && currentPath !== workspace
+
+  // Navigate up one directory level
+  const navigateUp = () => {
+    if (!currentPath) return
+    const parentPath = currentPath.split('/').slice(0, -1).join('/')
+    // If parent is the workspace or above, go to workspace root
+    if (!parentPath || parentPath === workspace || !parentPath.startsWith(workspace || '')) {
+      setCurrentPath(null)
+    } else {
+      setCurrentPath(parentPath)
+    }
+  }
+
+  if (!workspace) {
+    return <div className="file-tree empty">Select a workspace to view files</div>
   }
 
   if (loading) {
@@ -46,25 +90,24 @@ export function FileTree() {
 
   return (
     <div className="file-tree">
-      <div className="file-tree-header">
-        <span>Files</span>
-      </div>
       <ul className="file-list">
-        {currentPath && (
+        {isInSubdirectory && (
           <li
             className="file-item directory"
-            onClick={() => setCurrentPath('')}
+            onClick={navigateUp}
           >
-            📁 ..
+            <span className="file-icon">📁</span>
+            <span className="file-name">..</span>
           </li>
         )}
         {files.map((file) => (
           <li
             key={file.path}
-            className={`file-item ${file.is_directory ? 'directory' : 'file'}`}
+            className={`file-item ${file.is_directory ? 'directory' : 'file'} ${selectedPath === file.path ? 'selected' : ''}`}
             onClick={() => handleClick(file)}
           >
-            {file.is_directory ? '📁' : '📄'} {file.name}
+            <span className="file-icon">{file.is_directory ? '📁' : '📄'}</span>
+            <span className="file-name">{file.name}</span>
           </li>
         ))}
       </ul>

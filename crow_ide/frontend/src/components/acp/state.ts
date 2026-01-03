@@ -34,8 +34,23 @@ export interface AgentSessionState {
 
 // Constants
 const STORAGE_KEY = "crow_ide:acp:sessions:v1";
+const WORKSPACE_KEY = "crow_ide:workspace:v1";
+const RECENT_WORKSPACES_KEY = "crow_ide:recent_workspaces:v1";
 
-// Atoms
+// Workspace Atoms
+export const workspaceAtom = atomWithStorage<string | null>(
+  WORKSPACE_KEY,
+  null,  // null = prompt user to select workspace on first launch
+  jotaiJsonStorage as unknown as Parameters<typeof atomWithStorage<string | null>>[2],
+);
+
+export const recentWorkspacesAtom = atomWithStorage<string[]>(
+  RECENT_WORKSPACES_KEY,
+  [],
+  jotaiJsonStorage as unknown as Parameters<typeof atomWithStorage<string[]>>[2],
+);
+
+// Session Atoms
 export const agentSessionStateAtom = atomWithStorage<AgentSessionState>(
   STORAGE_KEY,
   {
@@ -231,7 +246,19 @@ export function getAgentDisplayName(agentId: ExternalAgentId): string {
 }
 
 export function getAgentWebSocketUrl(agentId: ExternalAgentId): string {
-  return AGENT_CONFIG[agentId].webSocketUrl;
+  // Route through crow_ide server for session persistence
+  // Server proxies to agent while logging all messages to SQLite
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  // For karla, don't include URL - server will spawn directly
+  if (agentId === "karla") {
+    return `${wsProtocol}//${window.location.host}/acp?agent=${agentId}`;
+  }
+
+  // For other agents, include the URL to proxy to
+  const config = AGENT_CONFIG[agentId];
+  const targetUrl = encodeURIComponent(config.webSocketUrl);
+  return `${wsProtocol}//${window.location.host}/acp?url=${targetUrl}&agent=${agentId}`;
 }
 
 interface AgentConfig {
@@ -306,4 +333,30 @@ export function updateSessionModel(
         : session,
     ),
   };
+}
+
+// Workspace utilities
+const MAX_RECENT_WORKSPACES = 5;
+
+export function addRecentWorkspace(
+  recentWorkspaces: string[],
+  workspace: string,
+): string[] {
+  // Remove if already exists, add to front, limit to max
+  const filtered = recentWorkspaces.filter((w) => w !== workspace);
+  return [workspace, ...filtered].slice(0, MAX_RECENT_WORKSPACES);
+}
+
+export function getWorkspaceBasename(path: string): string {
+  const parts = path.split("/");
+  return parts[parts.length - 1] || path;
+}
+
+export function shortenWorkspacePath(path: string): string {
+  // Replace home directory with ~
+  const home = "/home/thomas";  // TODO: Get from server
+  if (path.startsWith(home)) {
+    return "~" + path.slice(home.length);
+  }
+  return path;
 }
