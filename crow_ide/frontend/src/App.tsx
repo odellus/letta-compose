@@ -5,6 +5,7 @@ import { FileTree } from './components/FileTree'
 import { TabbedTerminal } from './components/TabbedTerminal'
 import { WorkspaceSelector } from './components/WorkspaceSelector'
 import { CodeHighlighter } from './components/CodeHighlighter'
+import { ResizeHandle } from './components/ResizeHandle'
 import AgentPanel from './components/acp/agent-panel'
 import { workspaceAtom } from './components/acp/state'
 import { setCurrentWorkspace } from './components/acp/adapters'
@@ -20,6 +21,11 @@ function App() {
   const [fileError, setFileError] = useState<string | null>(null)
   const [filesExpanded, setFilesExpanded] = useState(true)
   const [terminalExpanded, setTerminalExpanded] = useState(true)
+
+  // Resizable panel sizes (in pixels)
+  const [agentWidth, setAgentWidth] = useState(600)
+  const [filesWidth, setFilesWidth] = useState(200)
+  const [terminalHeight, setTerminalHeight] = useState(220)
 
   // Check if file has unsaved changes
   const isDirty = editedContent !== null && editedContent !== fileContent
@@ -112,9 +118,19 @@ function App() {
       {/* Main content area */}
       <div className="crow-main">
         {/* Left: Agent Panel - Full Height */}
-        <div className="crow-agent-section" data-testid="agent-panel">
+        <div
+          className="crow-agent-section"
+          data-testid="agent-panel"
+          style={{ width: agentWidth, flex: 'none' }}
+        >
           <AgentPanel />
         </div>
+
+        {/* Resize handle between agent and workspace */}
+        <ResizeHandle
+          direction="horizontal"
+          onResize={(delta) => setAgentWidth(w => Math.max(300, Math.min(1200, w + delta)))}
+        />
 
       {/* Right: Workspace (Editor + Files side-by-side, Terminal below) */}
       <div className="crow-workspace">
@@ -164,10 +180,19 @@ function App() {
             </div>
           </div>
 
+          {/* Resize handle between editor and files */}
+          {filesExpanded && (
+            <ResizeHandle
+              direction="horizontal"
+              onResize={(delta) => setFilesWidth(w => Math.max(100, Math.min(500, w - delta)))}
+            />
+          )}
+
           {/* File Explorer - Right side, collapsible */}
           <div
             className={`crow-files-section ${filesExpanded ? '' : 'collapsed'}`}
             data-testid="file-tree"
+            style={filesExpanded ? { width: filesWidth, flex: 'none' } : undefined}
           >
             <div
               className="crow-section-header crow-collapsible-header"
@@ -190,10 +215,19 @@ function App() {
           </div>
         </div>
 
+        {/* Resize handle between top area and terminal */}
+        {terminalExpanded && (
+          <ResizeHandle
+            direction="vertical"
+            onResize={(delta) => setTerminalHeight(h => Math.max(100, Math.min(500, h - delta)))}
+          />
+        )}
+
         {/* Terminal - Bottom of workspace */}
         <div
           className={`crow-terminal-section ${terminalExpanded ? '' : 'collapsed'}`}
           data-testid="terminal"
+          style={terminalExpanded ? { height: terminalHeight, flex: 'none' } : undefined}
         >
           <div
             className="crow-section-header crow-collapsible-header"

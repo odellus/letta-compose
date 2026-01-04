@@ -313,6 +313,8 @@ const PromptArea = memo<PromptAreaProps>(
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
+        // Don't submit while agent is processing
+        if (isLoading) return;
         if (promptValue.trim() || (files && files.length > 0)) {
           onPromptSubmit(promptValue, files);
         }
@@ -352,11 +354,7 @@ const PromptArea = memo<PromptAreaProps>(
                 ? "Processing..."
                 : "Ask anything..."
             }
-            className={cn(
-              "w-full min-h-[40px] max-h-[120px] p-2 text-sm border border-gray-700 rounded resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-800 text-gray-100 placeholder-gray-500",
-              isLoading && "opacity-50 pointer-events-none"
-            )}
-            disabled={isLoading}
+            className="w-full min-h-[40px] max-h-[120px] p-2 text-sm border border-gray-700 rounded resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-800 text-gray-100 placeholder-gray-500"
           />
         </div>
         <TooltipProvider>

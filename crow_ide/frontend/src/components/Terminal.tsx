@@ -98,8 +98,15 @@ export function Terminal() {
 
     window.addEventListener('resize', handleResize)
 
+    // Use ResizeObserver to detect container size changes (e.g., from drag resize)
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    resizeObserver.observe(containerRef.current)
+
     return () => {
       window.removeEventListener('resize', handleResize)
+      resizeObserver.disconnect()
       ws.close()
       terminal.dispose()
     }
