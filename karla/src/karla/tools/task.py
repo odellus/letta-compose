@@ -130,10 +130,6 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
                         "type": "string",
                         "description": "Text that signals completion (default: DONE)",
                     },
-                    "run_in_background": {
-                        "type": "boolean",
-                        "description": "Run in background (use TaskOutput to get results later)",
-                    },
                 },
                 "required": ["description", "prompt", "subagent_type"],
             },
@@ -143,7 +139,6 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
         description = args.get("description")
         prompt = args.get("prompt")
         subagent_type = args.get("subagent_type")
-        run_in_background = args.get("run_in_background", False)
 
         if not description:
             return ToolResult.error("description is required")
@@ -204,16 +199,6 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
 
         with self._lock:
             self._tasks[tracking_id] = future
-
-        if run_in_background:
-            return ToolResult.success(
-                f"Subagent started in background with HOTL mode.\n"
-                f"Task ID: {tracking_id}\n"
-                f"Type: {subagent_type}\n"
-                f"Max iterations: {max_iterations}\n"
-                f"Completion promise: <promise>{completion_promise}</promise>\n\n"
-                f"Use TaskOutput with task_id='{tracking_id}' to retrieve results."
-            )
 
         # Wait for result (no timeout - HOTL loops can take a while)
         try:
@@ -443,8 +428,7 @@ The subagent will keep working until it outputs <promise>DONE</promise> or hits 
     def humanize(self, args: dict[str, Any], result: ToolResult) -> str | None:
         description = args.get("description", "task")
         subagent_type = args.get("subagent_type", "agent")
-        bg = " (background)" if args.get("run_in_background") else ""
-        return f"subagent ({subagent_type}): {description}{bg}"
+        return f"subagent ({subagent_type}): {description}"
 
 
 class TaskOutputTool(Tool):

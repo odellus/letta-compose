@@ -30,6 +30,7 @@ class HOTLState:
     max_iterations: int = 0  # 0 = unlimited
     completion_promise: str | None = None
     status: HOTLStatus = HOTLStatus.RUNNING
+    auto_respond: bool = False  # If True, agent predicts user responses instead of waiting
 
     def should_continue(self) -> bool:
         """Check if the loop should continue."""
@@ -138,6 +139,7 @@ def _parse_state_file(content: str) -> HOTLState | None:
     iteration = 1
     max_iterations = 0
     completion_promise = None
+    auto_respond = False
 
     for line in frontmatter.split('\n'):
         line = line.strip()
@@ -158,23 +160,29 @@ def _parse_state_file(content: str) -> HOTLState | None:
                 value = value[1:-1]
             if value and value != 'null':
                 completion_promise = value
+        elif line.startswith('auto_respond:'):
+            value = line.split(':', 1)[1].strip().lower()
+            auto_respond = value == 'true'
 
     return HOTLState(
         prompt=prompt,
         iteration=iteration,
         max_iterations=max_iterations,
         completion_promise=completion_promise,
+        auto_respond=auto_respond,
     )
 
 
 def _format_state_file(state: HOTLState) -> str:
     """Format state for file storage."""
     promise_str = f'"{state.completion_promise}"' if state.completion_promise else 'null'
+    auto_respond_str = 'true' if state.auto_respond else 'false'
 
     return f"""---
 iteration: {state.iteration}
 max_iterations: {state.max_iterations}
 completion_promise: {promise_str}
+auto_respond: {auto_respond_str}
 ---
 
 {state.prompt}

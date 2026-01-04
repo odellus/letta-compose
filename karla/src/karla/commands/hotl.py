@@ -9,16 +9,22 @@ from karla.commands.registry import register, CommandType
 from karla.hotl import HOTLLoop
 
 
-def parse_hotl_args(args: str) -> tuple[str, int, str | None]:
+def parse_hotl_args(args: str) -> tuple[str, int, str | None, bool]:
     """Parse /hotl command arguments.
 
-    Format: <prompt> [--max-iterations N] [--completion-promise TEXT]
+    Format: <prompt> [--max-iterations N] [--completion-promise TEXT] [--auto-respond]
 
     Returns:
-        Tuple of (prompt, max_iterations, completion_promise)
+        Tuple of (prompt, max_iterations, completion_promise, auto_respond)
     """
     max_iterations = 0
     completion_promise = None
+    auto_respond = False
+
+    # Extract --auto-respond flag
+    if '--auto-respond' in args:
+        auto_respond = True
+        args = args.replace('--auto-respond', '')
 
     # Extract --max-iterations
     match = re.search(r'--max-iterations\s+(\d+)', args)
@@ -42,36 +48,43 @@ def parse_hotl_args(args: str) -> tuple[str, int, str | None]:
     if prompt.startswith('"') and prompt.endswith('"'):
         prompt = prompt[1:-1]
 
-    return prompt, max_iterations, completion_promise
+    return prompt, max_iterations, completion_promise, auto_respond
 
 
-@register("/hotl", "Start HOTL loop (/hotl <prompt> [--max-iterations N] [--completion-promise TEXT])", CommandType.CLI, order=20)
+@register("/hotl", "Start HOTL loop (/hotl <prompt> [--max-iterations N] [--completion-promise TEXT] [--auto-respond])", CommandType.CLI, order=20)
 async def cmd_hotl(ctx: CommandContext, args: str = "") -> str:
     """Start a HOTL (Human Out of The Loop) loop.
 
     Usage:
         /hotl "Your task prompt" --max-iterations 20 --completion-promise "DONE"
+        /hotl "Your task prompt" --auto-respond --max-iterations 10
 
     The loop will:
     1. Send your prompt to the agent
     2. Agent works on the task
-    3. When done, same prompt is sent again
+    3. When done, same prompt is sent again (or auto-respond prompt if --auto-respond)
     4. Agent sees its previous work in files
     5. Continues until completion promise or max iterations
+
+    With --auto-respond:
+    - Instead of re-sending the same prompt, agent predicts what user would say
+    - KV-cache friendly - maintains context continuity
     """
     if not args.strip():
-        return """Usage: /hotl <prompt> [--max-iterations N] [--completion-promise TEXT]
+        return """Usage: /hotl <prompt> [--max-iterations N] [--completion-promise TEXT] [--auto-respond]
 
 Examples:
   /hotl "Fix the failing tests" --max-iterations 10
   /hotl "Implement feature X" --completion-promise "COMPLETE"
   /hotl "Refactor the auth module" --max-iterations 20 --completion-promise "DONE"
+  /hotl "Build a REST API" --auto-respond --max-iterations 5 --completion-promise "DONE"
 
 Options:
   --max-iterations N       Stop after N iterations (default: unlimited)
-  --completion-promise T   Stop when agent outputs <promise>T</promise>"""
+  --completion-promise T   Stop when agent outputs <promise>T</promise>
+  --auto-respond           Agent predicts user responses (KV-cache friendly)"""
 
-    prompt, max_iterations, completion_promise = parse_hotl_args(args)
+    prompt, max_iterations, completion_promise, auto_respond = parse_hotl_args(args)
 
     if not prompt:
         return "Error: No prompt provided. Usage: /hotl <prompt>"
@@ -88,6 +101,7 @@ Options:
         prompt=prompt,
         max_iterations=max_iterations,
         completion_promise=completion_promise,
+        auto_respond=auto_respond,
     )
 
     # Build status message
@@ -96,6 +110,8 @@ Options:
         status_parts.append(f"max {max_iterations} iterations")
     if completion_promise:
         status_parts.append(f"promise: <promise>{completion_promise}</promise>")
+    if auto_respond:
+        status_parts.append("auto-respond")
 
     status = " | ".join(status_parts)
 

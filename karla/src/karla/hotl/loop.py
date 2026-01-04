@@ -36,6 +36,7 @@ class HOTLLoop:
         prompt: str,
         max_iterations: int = 0,
         completion_promise: str | None = None,
+        auto_respond: bool = False,
     ) -> HOTLState:
         """Start a new HOTL loop.
 
@@ -43,6 +44,7 @@ class HOTLLoop:
             prompt: The prompt to repeat each iteration
             max_iterations: Max iterations (0 = unlimited)
             completion_promise: Text that signals completion
+            auto_respond: If True, agent predicts user responses instead of waiting
 
         Returns:
             Initial HOTLState
@@ -52,12 +54,14 @@ class HOTLLoop:
             iteration=1,
             max_iterations=max_iterations,
             completion_promise=completion_promise,
+            auto_respond=auto_respond,
         )
         save_state(self.working_dir, state)
         logger.info(
-            "HOTL loop started: max_iterations=%d, promise=%s",
+            "HOTL loop started: max_iterations=%d, promise=%s, auto_respond=%s",
             max_iterations,
             completion_promise,
+            auto_respond,
         )
         return state
 
@@ -96,6 +100,7 @@ class HOTLLoop:
             - inject_message: The prompt to send
             - iteration: Current iteration number
             - status_message: Status to display
+            - auto_respond: Whether this is an auto-respond iteration
 
             None if loop should end.
         """
@@ -138,12 +143,29 @@ class HOTLLoop:
                 + (f"/{state.max_iterations}" if state.max_iterations > 0 else "")
             )
 
-        logger.info("HOTL loop continuing: iteration %d", state.iteration)
+        if state.auto_respond:
+            status += " | auto-respond"
+
+        logger.info("HOTL loop continuing: iteration %d, auto_respond=%s", state.iteration, state.auto_respond)
+
+        # Determine inject message based on auto_respond mode
+        if state.auto_respond:
+            # In auto-respond mode, ask agent to predict what user would say
+            inject_message = (
+                "Based on my previous responses and our current task priorities, "
+                "predict what I (the user) would respond to continue this task. "
+                "Generate my response, then continue working on the task.\n\n"
+                f"Original task: {state.prompt}"
+            )
+        else:
+            # Standard HOTL - re-inject same prompt
+            inject_message = state.prompt
 
         return {
-            "inject_message": state.prompt,
+            "inject_message": inject_message,
             "iteration": state.iteration,
             "status_message": status,
+            "auto_respond": state.auto_respond,
         }
 
 
