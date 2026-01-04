@@ -61,7 +61,7 @@ from karla.letta import register_tools_with_letta
 from karla.executor import ToolExecutor
 from karla.hooks import HooksManager
 from karla.hotl.loop import create_hotl_hooks
-from karla.memory import update_project_block
+from karla.memory import update_project_block, update_system_prompt
 from karla.settings import SettingsManager
 from karla.tools import create_default_registry
 
@@ -342,8 +342,18 @@ class KarlaAgent(Agent):
         # Save as last used agent for next session
         settings.save_last_agent(karla_agent.agent_id)
 
-        # Update project memory block with environment context
+        # Update BOTH the system prompt AND project memory block with new cwd
+        # This is critical when reusing an existing agent for a new working directory
+        update_system_prompt(client, karla_agent.agent_id, cwd)
         update_project_block(client, karla_agent.agent_id, cwd)
+
+        # Reset message history when creating a new session
+        # This ensures the agent starts fresh without old conversation context
+        client.agents.messages.reset(
+            agent_id=karla_agent.agent_id,
+            add_default_initial_messages=False,
+        )
+        logger.info("Reset message history for agent %s", karla_agent.agent_id)
 
         # Create hooks manager with HOTL hooks
         hooks_manager = HooksManager()

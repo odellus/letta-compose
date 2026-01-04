@@ -6,6 +6,7 @@ import {
   BotMessageSquareIcon,
   ClockIcon,
   Loader2,
+  PaperclipIcon,
   RefreshCwIcon,
   SendIcon,
   SquareIcon,
@@ -45,6 +46,8 @@ import type {
   NotificationEvent,
   SessionModelState,
 } from "./types";
+import { FileAttachmentList } from "./file-attachment";
+import { convertFilesToResourceLinks, SUPPORTED_ATTACHMENT_TYPES } from "./context-utils";
 import "./agent-panel.css";
 
 const logger = Logger.get("agents");
@@ -268,10 +271,14 @@ interface PromptAreaProps {
   promptValue: string;
   commands: AvailableCommands | undefined;
   onPromptValueChange: (value: string) => void;
-  onPromptSubmit: (prompt: string) => void;
+  onPromptSubmit: (prompt: string, files?: File[]) => void;
   onStop: () => void;
   sessionModels?: SessionModelState | null;
   onModelChange?: (modelId: string) => void;
+  files?: File[];
+  onAddFiles: (files: File[]) => void;
+  onRemoveFile: (file: File) => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
 const PromptArea = memo<PromptAreaProps>(
@@ -284,6 +291,10 @@ const PromptArea = memo<PromptAreaProps>(
     onStop,
     sessionModels,
     onModelChange,
+    files,
+    onAddFiles,
+    onRemoveFile,
+    fileInputRef,
   }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const wasLoadingRef = useRef(false);
@@ -300,20 +311,29 @@ const PromptArea = memo<PromptAreaProps>(
     const handleKeyDown = (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (promptValue.trim()) {
-          onPromptSubmit(promptValue);
+        if (promptValue.trim() || (files && files.length > 0)) {
+          onPromptSubmit(promptValue, files);
         }
       }
     };
 
     const handleSendClick = () => {
-      if (promptValue.trim()) {
-        onPromptSubmit(promptValue);
+      if (promptValue.trim() || (files && files.length > 0)) {
+        onPromptSubmit(promptValue, files);
       }
     };
 
+    const hasContent = promptValue.trim() || (files && files.length > 0);
+
     return (
       <div className="border-t border-gray-700 bg-gray-900 flex-shrink-0">
+        {/* File attachment pills */}
+        {files && files.length > 0 && (
+          <div className="px-3 pt-2">
+            <FileAttachmentList files={files} onRemove={onRemoveFile} />
+          </div>
+        )}
+
         <div
           className={cn(
             "px-3 py-2 min-h-[60px]",
@@ -347,6 +367,32 @@ const PromptArea = memo<PromptAreaProps>(
                   disabled={isLoading}
                 />
               )}
+              {/* File attachment button */}
+              <Tooltip content="Attach files">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                >
+                  <PaperclipIcon className="h-4 w-4 text-gray-400" />
+                </Button>
+              </Tooltip>
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) {
+                    onAddFiles([...e.target.files]);
+                    e.target.value = ""; // Reset to allow selecting same file again
+                  }
+                }}
+                accept={SUPPORTED_ATTACHMENT_TYPES.join(",")}
+              />
             </div>
             <div className="flex flex-row gap-2 items-center">
               <span className="text-xs text-gray-500">
@@ -361,10 +407,10 @@ const PromptArea = memo<PromptAreaProps>(
                     isLoading
                       ? "bg-red-600 hover:bg-red-700 text-white border-red-600"
                       : "bg-purple-600 hover:bg-purple-700 text-white border-purple-600",
-                    (!promptValue.trim() && !isLoading) && "opacity-50 cursor-not-allowed"
+                    !hasContent && !isLoading && "opacity-50 cursor-not-allowed"
                   )}
                   onClick={isLoading ? onStop : handleSendClick}
-                  disabled={isLoading ? false : !promptValue.trim()}
+                  disabled={isLoading ? false : !hasContent}
                 >
                   {isLoading ? (
                     <>
@@ -542,9 +588,11 @@ const AgentPanel: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | string | null>(null);
   const [promptValue, setPromptValue] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [sessionModels, setSessionModels] = useState<SessionModelState | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const isCreatingNewSession = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedTab] = useAtom(selectedTabAtom);
   const [sessionState, setSessionState] = useAtom(agentSessionStateAtom);
@@ -552,7 +600,7 @@ const AgentPanel: React.FC = () => {
   const prevWorkspace = useRef(workspace);
 
   const wsUrl = selectedTab
-    ? getAgentWebSocketUrl(selectedTab.agentId)
+    ? getAgentWebSocketUrl(selectedTab.agentId, workspace ?? undefined)
     : NO_WS_SET;
 
   const acpClient = useAcpClient({
@@ -796,14 +844,15 @@ const AgentPanel: React.FC = () => {
 
   // Handler for prompt submission
   const handlePromptSubmit = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, attachedFiles?: File[]) => {
       if (!activeSessionId || !agent || isLoading) {
         return;
       }
 
-      logger.debug("Submitting prompt to agent", { sessionId: activeSessionId });
+      logger.debug("Submitting prompt to agent", { sessionId: activeSessionId, fileCount: attachedFiles?.length || 0 });
       setIsLoading(true);
       setPromptValue("");
+      setFiles([]);
 
       // Update session title with first message if it's still the default
       if (selectedTab?.title.startsWith("New ")) {
@@ -811,6 +860,13 @@ const AgentPanel: React.FC = () => {
       }
 
       const promptBlocks: ContentBlock[] = [{ type: "text", text: prompt }];
+
+      // Add file attachments as resource_links
+      if (attachedFiles && attachedFiles.length > 0) {
+        const fileResourceLinks = await convertFilesToResourceLinks(attachedFiles);
+        promptBlocks.push(...fileResourceLinks);
+        logger.debug("Added file attachments", { count: fileResourceLinks.length });
+      }
 
       // Add system prompt on first message
       const hasGivenRules = notifications.some(
@@ -844,6 +900,21 @@ const AgentPanel: React.FC = () => {
     },
     [activeSessionId, agent, isLoading, selectedTab, notifications, setSessionState]
   );
+
+  // Handler for adding files
+  const handleAddFiles = useCallback((newFiles: File[]) => {
+    if (newFiles.length === 0) {
+      return;
+    }
+    setFiles((prev) => [...prev, ...newFiles]);
+    logger.debug("Added files", { count: newFiles.length });
+  }, []);
+
+  // Handler for removing files
+  const handleRemoveFile = useCallback((fileToRemove: File) => {
+    setFiles((prev) => prev.filter((f) => f !== fileToRemove));
+    logger.debug("Removed file", { name: fileToRemove.name });
+  }, []);
 
   // Handler for stopping the current operation
   const handleStop = useCallback(async () => {
@@ -1004,6 +1075,10 @@ const AgentPanel: React.FC = () => {
           commands={availableCommands}
           sessionModels={sessionModels}
           onModelChange={handleModelChange}
+          files={files}
+          onAddFiles={handleAddFiles}
+          onRemoveFile={handleRemoveFile}
+          fileInputRef={fileInputRef}
         />
       </>
     );

@@ -245,20 +245,26 @@ export function getAgentDisplayName(agentId: ExternalAgentId): string {
   return capitalize(agentId);
 }
 
-export function getAgentWebSocketUrl(agentId: ExternalAgentId): string {
+export function getAgentWebSocketUrl(agentId: ExternalAgentId, cwd?: string): string {
   // Route through crow_ide server for session persistence
   // Server proxies to agent while logging all messages to SQLite
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-  // For karla, don't include URL - server will spawn directly
+  // Build base URL with agent type
+  const baseUrl = `${wsProtocol}//${window.location.host}/acp?agent=${agentId}`;
+
+  // Add cwd if provided - this tells the server where to start the ACP process
+  const cwdParam = cwd ? `&cwd=${encodeURIComponent(cwd)}` : '';
+
+  // For karla, don't include URL - server will spawn directly from cwd
   if (agentId === "karla") {
-    return `${wsProtocol}//${window.location.host}/acp?agent=${agentId}`;
+    return `${baseUrl}${cwdParam}`;
   }
 
   // For other agents, include the URL to proxy to
   const config = AGENT_CONFIG[agentId];
   const targetUrl = encodeURIComponent(config.webSocketUrl);
-  return `${wsProtocol}//${window.location.host}/acp?url=${targetUrl}&agent=${agentId}`;
+  return `${baseUrl}&url=${targetUrl}${cwdParam}`;
 }
 
 interface AgentConfig {

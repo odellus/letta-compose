@@ -24,6 +24,13 @@ async def cmd_clear(ctx: CommandContext) -> str:
 @register("/compact", "Summarize conversation history", CommandType.API, order=11)
 async def cmd_compact(ctx: CommandContext) -> str:
     """Compact/summarize the conversation."""
+    import json
+    import httpx
+
+    # Count messages before compact
+    messages_before = list(ctx.client.agents.messages.list(agent_id=ctx.agent_id, limit=1000))
+    count_before = len(messages_before)
+
     try:
         result = ctx.client.agents.messages.compact(agent_id=ctx.agent_id)
 
@@ -32,6 +39,20 @@ async def cmd_compact(ctx: CommandContext) -> str:
         update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
 
         return f"Compacted {result.num_messages_before} -> {result.num_messages_after} messages. Context refreshed."
+    except json.JSONDecodeError:
+        # Letta server returns 204 No Content on success, but SDK expects JSON.
+        # Work around by counting messages after the operation.
+        messages_after = list(ctx.client.agents.messages.list(agent_id=ctx.agent_id, limit=1000))
+        count_after = len(messages_after)
+
+        # Refresh context
+        update_system_prompt(ctx.client, ctx.agent_id, ctx.working_dir)
+        update_project_block(ctx.client, ctx.agent_id, ctx.working_dir)
+
+        if count_after < count_before:
+            return f"Compacted {count_before} -> {count_after} messages. Context refreshed."
+        else:
+            return f"Conversation summarized ({count_after} messages). Context refreshed."
     except Exception as e:
         # Compact may not be available on all Crow server versions
         return f"Compact not available: {e}"

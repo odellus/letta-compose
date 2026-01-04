@@ -119,21 +119,31 @@ async def acp_websocket(websocket: WebSocket) -> None:
     Query params:
         url: Target WebSocket URL (e.g., ws://localhost:3000) - optional
         agent: Agent type (e.g., karla, claude)
+        cwd: Working directory for the agent - required for agents to work correctly
         direct: If "true", spawn subprocess directly instead of proxying
 
     For karla agent without explicit URL, spawns karla-acp directly as subprocess.
     For other agents or explicit URLs, proxies to the WebSocket URL.
+
+    IMPORTANT: The cwd param determines where the agent process runs from.
+    This affects file operations, git status, and all path-relative tools.
     """
     query_params = dict(websocket.query_params)
     target_url = query_params.get("url")
     agent_type = query_params.get("agent", "unknown")
+    cwd = query_params.get("cwd")  # User-selected workspace directory
     use_direct = query_params.get("direct", "false").lower() == "true"
 
     # For karla agent, spawn directly unless URL explicitly provided
     if agent_type == "karla" and (not target_url or use_direct):
-        # Run from karla directory where karla.yaml config exists
-        karla_dir = Path(__file__).parent.parent / "karla"
-        bridge = ACPBridge(["karla-acp"], cwd=str(karla_dir))
+        # Use user-specified cwd, or fall back to karla directory for config
+        if cwd:
+            working_dir = cwd
+        else:
+            # Fall back to karla directory where karla.yaml config exists
+            karla_dir = Path(__file__).parent.parent / "karla"
+            working_dir = str(karla_dir)
+        bridge = ACPBridge(["karla-acp"], cwd=working_dir)
         await bridge.handle(websocket)
     else:
         # Proxy to external WebSocket URL
