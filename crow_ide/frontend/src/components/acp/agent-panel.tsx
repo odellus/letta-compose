@@ -12,7 +12,7 @@ import {
   SquareIcon,
   StopCircleIcon,
 } from "lucide-react";
-import React, { memo, useEffect, useRef, useState, useCallback } from "react";
+import React, { memo, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useAcpClient } from "use-acp";
 import type { ContentBlock, RequestPermissionResponse } from "@zed-industries/agent-client-protocol";
 import { Button } from "../ui/button";
@@ -38,12 +38,14 @@ import {
 import { AgentThread } from "./thread";
 import { ReadyToChatBlock } from "./blocks";
 import { getAgentPrompt } from "./prompt";
+import { TodoPanel } from "./todo-panel";
 import type {
   AgentConnectionState,
   AgentPendingPermission,
   AvailableCommands,
   ExternalAgentSessionId,
   NotificationEvent,
+  PlanNotificationEvent,
   SessionModelState,
 } from "./types";
 import { FileAttachmentList } from "./file-attachment";
@@ -440,6 +442,7 @@ interface ChatContentProps {
   connectionState: AgentConnectionState;
   sessionId: ExternalAgentSessionId | null;
   notifications: NotificationEvent[];
+  isStreaming?: boolean;
   pendingPermission: AgentPendingPermission;
   onResolvePermission: (option: RequestPermissionResponse) => void;
   onRetryConnection?: () => void;
@@ -452,6 +455,7 @@ const ChatContent = memo<ChatContentProps>(
     agentId,
     connectionState,
     notifications,
+    isStreaming,
     pendingPermission,
     onResolvePermission,
     onRetryConnection,
@@ -469,8 +473,9 @@ const ChatContent = memo<ChatContentProps>(
 
       const { scrollTop, scrollHeight, clientHeight } = container;
       const hasOverflow = scrollHeight > clientHeight;
+      // Use larger threshold (100px) to prevent button flashing during streaming
       const isAtBottom = hasOverflow
-        ? Math.abs(scrollHeight - clientHeight - scrollTop) < 5
+        ? Math.abs(scrollHeight - clientHeight - scrollTop) < 100
         : true;
       setIsScrolledToBottom(isAtBottom);
     }, []);
@@ -487,19 +492,33 @@ const ChatContent = memo<ChatContentProps>(
       });
     }, []);
 
-    // Auto-scroll to bottom when new notifications arrive
+    // Track previous notification count to detect new messages
+    const prevNotificationCount = useRef(notifications.length);
+
+    // Auto-scroll to bottom when notifications change
+    // Be more aggressive: always scroll during streaming or when new content arrives
     useEffect(() => {
-      if (isScrolledToBottom && notifications.length > 0) {
-        const timeout = setTimeout(scrollToBottom, 100);
-        return () => clearTimeout(timeout);
+      const isNewContent = notifications.length > prevNotificationCount.current;
+      prevNotificationCount.current = notifications.length;
+
+      if (notifications.length > 0) {
+        // Always scroll during streaming or when new content arrives
+        // Only skip if user has scrolled up AND no new content
+        if (isStreaming || isNewContent || isScrolledToBottom) {
+          const rafId = requestAnimationFrame(() => {
+            scrollToBottom();
+          });
+          return () => cancelAnimationFrame(rafId);
+        }
       }
-    }, [notifications.length, isScrolledToBottom, scrollToBottom]);
+    }, [notifications.length, isStreaming, isScrolledToBottom, scrollToBottom]);
 
     const renderThread = () => {
       if (hasNotifications) {
         return (
           <AgentThread
             isConnected={connectionState.status === "connected"}
+            isStreaming={isStreaming}
             notifications={notifications}
             onRetryConnection={onRetryConnection}
           />
@@ -968,6 +987,20 @@ const AgentPanel: React.FC = () => {
   const hasNotifications = notifications.length > 0;
   const hasActiveSessions = sessionState.sessions.length > 0;
 
+  // Extract plan notifications for the sticky TodoPanel
+  const planNotifications = useMemo((): PlanNotificationEvent[] => {
+    const plans: PlanNotificationEvent[] = [];
+    for (const n of notifications) {
+      if (n.type === "session_notification") {
+        const update = (n.data as { update?: { sessionUpdate?: string } })?.update;
+        if (update?.sessionUpdate === "plan") {
+          plans.push(update as PlanNotificationEvent);
+        }
+      }
+    }
+    return plans;
+  }, [notifications]);
+
   // Show history panel if requested (takes priority over everything)
   if (showHistory) {
     return (
@@ -1048,6 +1081,7 @@ const AgentPanel: React.FC = () => {
           hasNotifications={hasNotifications}
           connectionState={connectionState}
           notifications={notifications}
+          isStreaming={isLoading}
           pendingPermission={pendingPermission}
           onResolvePermission={(option) => {
             logger.debug("Resolving permission request", {
@@ -1064,6 +1098,8 @@ const AgentPanel: React.FC = () => {
           isRequestingPermission={!!pendingPermission}
           onStop={handleStop}
         />
+
+        <TodoPanel plans={planNotifications} />
 
         <PromptArea
           isLoading={isLoading}

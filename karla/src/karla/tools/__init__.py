@@ -10,7 +10,7 @@ from karla.tools.plan_mode import EnterPlanModeTool, ExitPlanModeTool
 from karla.tools.read import ReadTool
 from karla.tools.skill import SkillTool
 from karla.tools.task import TaskOutputTool, TaskTool
-from karla.tools.todo import TodoStore, TodoWriteTool
+from karla.tools.todo import TodoReadTool, TodoStore, TodoWriteTool
 from karla.tools.web_fetch import WebFetchTool
 from karla.tools.web_search import WebSearchTool
 from karla.tools.write import WriteTool
@@ -34,6 +34,7 @@ __all__ = [
     "EnterPlanModeTool",
     "ExitPlanModeTool",
     "TodoWriteTool",
+    "TodoReadTool",
     "TodoStore",
     # Agent tools
     "TaskTool",
@@ -81,6 +82,7 @@ def create_default_registry(working_dir: str, skills_dir: str | None = None):
     registry.register(EnterPlanModeTool())
     registry.register(ExitPlanModeTool())
     registry.register(TodoWriteTool())
+    registry.register(TodoReadTool())
 
     # Agent tools
     task_tool = TaskTool()

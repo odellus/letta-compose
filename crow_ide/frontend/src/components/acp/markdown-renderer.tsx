@@ -47,9 +47,9 @@ function isMermaidCodeComplete(code: string): boolean {
     'gitGraph', 'mindmap', 'timeline', 'zenuml', 'sankey', 'xychart', 'block'
   ];
 
-  const firstLine = trimmed.split('\n')[0].toLowerCase();
+  const firstWord = trimmed.split(/[\s\n]/)[0].toLowerCase();
   const hasDiagramType = diagramTypes.some(type =>
-    firstLine.startsWith(type.toLowerCase()) || firstLine.startsWith(type.toLowerCase() + '-')
+    firstWord === type.toLowerCase() || firstWord.startsWith(type.toLowerCase() + '-')
   );
 
   if (!hasDiagramType) return false;
@@ -60,39 +60,45 @@ function isMermaidCodeComplete(code: string): boolean {
     return false;
   }
 
-  // Must have at least 2 lines for most diagrams (type + content)
-  const lines = trimmed.split('\n').filter(l => l.trim());
-  if (lines.length < 2 && !['pie', 'mindmap'].includes(firstLine.split(/\s/)[0])) {
-    return false;
+  // For flowchart/graph, check that we have actual content after the type declaration
+  // A valid single-line flowchart looks like: "flowchart TD A --> B"
+  // We just need to check there's something after the direction (TD, LR, etc.) or the type
+  if (firstWord === 'flowchart' || firstWord === 'graph') {
+    // Should have at least a node definition (contains brackets or has arrows)
+    const hasContent = trimmed.includes('[') || trimmed.includes('-->') || trimmed.includes('---');
+    return hasContent;
   }
 
   return true;
 }
 
 const MermaidBlock = memo<MermaidBlockProps>(({ code, isStreaming = false }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [renderAttempted, setRenderAttempted] = useState(false);
-  const lastCodeRef = useRef<string>("");
+  const lastRenderKeyRef = useRef<string>("");
 
   const isComplete = isMermaidCodeComplete(code);
 
   useEffect(() => {
-    // Don't re-render if code hasn't changed
-    if (code === lastCodeRef.current) return;
-    lastCodeRef.current = code;
+    // Track both code AND streaming state to ensure we re-render when streaming completes
+    const renderKey = `${code}-${isStreaming}`;
+    if (renderKey === lastRenderKeyRef.current) return;
+    lastRenderKeyRef.current = renderKey;
 
     const renderDiagram = async () => {
       if (!code.trim()) return;
 
-      // Don't attempt to render incomplete code while streaming
-      if (!isComplete && isStreaming) {
-        setRenderAttempted(false);
+      // CRITICAL: Never attempt to render while streaming - wait for closing ```
+      // The isStreaming flag is true when hasUnclosedCodeBlock() detects odd ``` count,
+      // meaning the markdown parser hasn't seen the closing fence yet.
+      if (isStreaming) {
         return;
       }
 
-      setRenderAttempted(true);
+      // Additional heuristic check for incomplete mermaid syntax
+      if (!isComplete) {
+        return;
+      }
 
       try {
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
@@ -107,13 +113,12 @@ const MermaidBlock = memo<MermaidBlockProps>(({ code, isStreaming = false }) => 
       }
     };
 
-    // Debounce render attempts during streaming
-    const timeoutId = setTimeout(renderDiagram, isStreaming ? 500 : 0);
-    return () => clearTimeout(timeoutId);
+    // No debounce needed - we only render when streaming is complete
+    renderDiagram();
   }, [code, isComplete, isStreaming]);
 
-  // Show streaming indicator for incomplete code
-  if (!isComplete || (!renderAttempted && isStreaming)) {
+  // Show streaming indicator while streaming or for incomplete code
+  if (isStreaming || !isComplete) {
     return (
       <div className="border border-blue-700/50 bg-blue-900/20 rounded p-3 my-2">
         <div className="flex items-center gap-2 text-xs text-blue-400 mb-2">
@@ -151,7 +156,6 @@ const MermaidBlock = memo<MermaidBlockProps>(({ code, isStreaming = false }) => 
 
   return (
     <div
-      ref={containerRef}
       className="my-2 overflow-x-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
@@ -216,7 +220,7 @@ function hasUnclosedLatex(content: string): boolean {
 }
 
 export const MarkdownRenderer = memo<MarkdownRendererProps>(({ content, className, isStreaming: isStreamingProp }) => {
-  // Auto-detect streaming if not explicitly provided
+  // Auto-detect streaming if not explicitly provided, but prefer explicit prop
   const isStreaming = isStreamingProp ?? (hasUnclosedCodeBlock(content) || hasUnclosedLatex(content));
 
   return (

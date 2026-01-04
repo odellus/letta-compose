@@ -15,6 +15,7 @@ type NotificationEvent = Awaited<
 interface AgentThreadProps {
   notifications: NotificationEvent[];
   isConnected: boolean;
+  isStreaming?: boolean;
   onRetryConnection?: () => void;
   onRetryLastAction?: () => void;
   onDismissError?: (errorId: string) => void;
@@ -23,6 +24,7 @@ interface AgentThreadProps {
 export const AgentThread = ({
   notifications,
   isConnected,
+  isStreaming = false,
   onRetryConnection,
   onRetryLastAction,
   onDismissError,
@@ -93,6 +95,7 @@ export const AgentThread = ({
           startTimestamp={startTimestamp}
           endTimestamp={endTimestamp}
           isLastBlock={isLastBlock}
+          isStreaming={isLastBlock && isStreaming}
         />
       );
     }

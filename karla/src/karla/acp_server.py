@@ -34,6 +34,7 @@ from acp.helpers import update_available_commands
 from acp.interfaces import Client
 from acp.schema import (
     AgentCapabilities,
+    AgentPlanUpdate,
     AudioContentBlock,
     AvailableCommand,
     ClientCapabilities,
@@ -42,6 +43,7 @@ from acp.schema import (
     ImageContentBlock,
     Implementation,
     McpServerStdio,
+    PlanEntry,
     ResourceContentBlock,
     SseMcpServer,
     TextContentBlock,
@@ -574,6 +576,30 @@ class KarlaAgent(Agent):
 
             # Convert locations to ToolCallLocation objects
             locations = [ToolCallLocation(**loc) for loc in info.get("locations", [])]
+
+            # For TodoWrite, send a plan update notification instead of/in addition to tool call
+            if name == "TodoWrite":
+                todos = args.get("todos", [])
+                # Send plan update even for empty list (to clear the UI)
+                if isinstance(todos, list):
+                    # Convert todos to PlanEntry format
+                    entries = [
+                        PlanEntry(
+                            content=todo.get("content", ""),
+                            status=todo.get("status", "pending"),
+                            priority="medium",
+                        )
+                        for todo in todos
+                    ]
+                    # Send plan update
+                    await self._conn.session_update(
+                        session_id=session_id,
+                        update=AgentPlanUpdate(
+                            session_update="plan",
+                            entries=entries,
+                        ),
+                    )
+                    logger.info("Sent plan update with %d entries", len(entries))
 
             await self._conn.session_update(
                 session_id=session_id,

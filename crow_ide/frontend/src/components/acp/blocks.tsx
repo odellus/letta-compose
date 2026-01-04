@@ -303,31 +303,69 @@ export const PlansBlock = (props: { data: PlanNotificationEvent[] }) => {
   let plans = props.data.flatMap((item) => item.entries);
   plans = uniqueByTakeLast(plans, (item) => item.content);
 
+  const completedCount = plans.filter((p) => p.status === "completed").length;
+  const inProgressCount = plans.filter((p) => p.status === "in_progress").length;
+  const pendingCount = plans.filter((p) => p.status === "pending").length;
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed":
+        return (
+          <span className="flex h-4 w-4 items-center justify-center rounded bg-green-600 text-white text-[10px] font-bold">
+            ✓
+          </span>
+        );
+      case "in_progress":
+        // Subtle pulsing dot instead of spinning loader
+        return (
+          <span className="relative flex h-4 w-4 items-center justify-center">
+            <span className="absolute h-2 w-2 rounded-full bg-blue-400 animate-ping opacity-75" />
+            <span className="relative h-2 w-2 rounded-full bg-blue-500" />
+          </span>
+        );
+      default:
+        return (
+          <span className="flex h-4 w-4 items-center justify-center rounded border border-gray-500 bg-gray-700" />
+        );
+    }
+  };
+
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-800 p-2 text-xs">
-      <div className="flex items-center justify-between mb-2">
-        <span className="font-medium text-gray-300">
-          To-dos{" "}
-          <span className="font-normal text-gray-500">{plans.length}</span>
+    <div className="rounded-lg border border-gray-700 bg-gray-800/50 p-3 text-xs">
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-medium text-gray-200 flex items-center gap-2">
+          <WrenchIcon className="h-3.5 w-3.5 text-gray-400" />
+          Tasks
         </span>
+        <div className="flex items-center gap-2 text-[10px]">
+          {completedCount > 0 && (
+            <span className="text-green-400">{completedCount} done</span>
+          )}
+          {inProgressCount > 0 && (
+            <span className="text-blue-400">{inProgressCount} active</span>
+          )}
+          {pendingCount > 0 && (
+            <span className="text-gray-500">{pendingCount} pending</span>
+          )}
+        </div>
       </div>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-1.5">
         {plans.map((item, index) => (
           <li
-            key={`${item.status}-${index}`}
-            className="flex items-center gap-2 px-2 py-1 rounded"
+            key={`${item.content}-${index}`}
+            className={cn(
+              "flex items-center gap-2 px-2 py-1.5 rounded transition-colors",
+              item.status === "in_progress" && "bg-blue-900/20 border border-blue-700/30",
+              item.status === "completed" && "bg-green-900/10"
+            )}
           >
-            <input
-              type="checkbox"
-              checked={item.status === "completed"}
-              readOnly={true}
-              className="accent-blue-500 h-4 w-4 rounded border border-gray-600"
-              tabIndex={-1}
-            />
+            {getStatusIcon(item.status)}
             <span
               className={cn(
-                "text-xs",
-                item.status === "completed" && "line-through text-gray-500"
+                "text-xs flex-1",
+                item.status === "completed" && "line-through text-gray-500",
+                item.status === "in_progress" && "text-blue-300 font-medium",
+                item.status === "pending" && "text-gray-300"
               )}
             >
               {item.content}
@@ -349,6 +387,7 @@ export const UserMessagesBlock = (props: { data: UserNotificationEvent[] }) => {
 
 export const AgentMessagesBlock = (props: {
   data: AgentNotificationEvent[];
+  isStreaming?: boolean;
 }) => {
   const mergedContent = mergeConsecutiveTextBlocks(
     props.data.map((item) => item.content)
@@ -356,15 +395,15 @@ export const AgentMessagesBlock = (props: {
 
   return (
     <div className="flex flex-col gap-2">
-      <ContentBlocks data={mergedContent} />
+      <ContentBlocks data={mergedContent} isStreaming={props.isStreaming} />
     </div>
   );
 };
 
-export const ContentBlocks = (props: { data: ContentBlock[] }) => {
+export const ContentBlocks = (props: { data: ContentBlock[]; isStreaming?: boolean }) => {
   const renderBlock = (block: ContentBlock) => {
     if (block.type === "text") {
-      return <MarkdownRenderer content={block.text} />;
+      return <MarkdownRenderer content={block.text} isStreaming={props.isStreaming} />;
     }
     if (block.type === "image") {
       return <ImageBlock data={block as ContentBlockOf<"image">} />;
@@ -516,6 +555,7 @@ export const SessionNotificationsBlock = <
   startTimestamp: number;
   endTimestamp: number;
   isLastBlock: boolean;
+  isStreaming?: boolean;
 }) => {
   if (props.data.length === 0) {
     return null;
@@ -546,7 +586,7 @@ export const SessionNotificationsBlock = <
       return <UserMessagesBlock data={items} />;
     }
     if (isAgentMessages(items)) {
-      return <AgentMessagesBlock data={items} />;
+      return <AgentMessagesBlock data={items} isStreaming={props.isStreaming} />;
     }
     if (isPlans(items)) {
       return <PlansBlock data={items} />;

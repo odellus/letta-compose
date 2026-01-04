@@ -161,3 +161,49 @@ Do NOT use for trivial single-step tasks.""",
         if in_progress:
             return f"todo: {in_progress[0].get('activeForm', 'working')}"
         return "todo: updated"
+
+
+class TodoReadTool(Tool):
+    """Read the current todo list state."""
+
+    def __init__(self, store: TodoStore | None = None) -> None:
+        self._store = store
+
+    @property
+    def store(self) -> TodoStore:
+        return self._store if self._store else get_todo_store()
+
+    @property
+    def name(self) -> str:
+        return "TodoRead"
+
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(
+            name="TodoRead",
+            description="""Read the current todo list to see your tracked tasks.
+
+Use this when:
+- You need to check your current task list after context compaction
+- You want to verify the state of your todos
+- You're resuming work and need to know what tasks are pending
+
+Returns the full todo list with content, status, and activeForm for each item.""",
+            parameters={
+                "type": "object",
+                "properties": {},
+            },
+        )
+
+    async def execute(self, args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+        todos = self.store.to_list()
+
+        if not todos:
+            return ToolResult.success("No todos in the list. Use TodoWrite to create tasks.")
+
+        # Format nicely for the agent
+        import json
+        return ToolResult.success(json.dumps(todos, indent=2))
+
+    def humanize(self, args: dict[str, Any], result: ToolResult) -> str | None:
+        count = len(self.store.items)
+        return f"todo: read {count} items"
